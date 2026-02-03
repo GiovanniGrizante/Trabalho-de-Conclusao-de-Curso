@@ -52,7 +52,7 @@ ons_total = ons_total.rename(columns={'din_instante':'Dia-Hora',
 # Converter a coluna 'Geração' para float, substituindo valores vazios por 0
 ons_total['Geração'] = pd.to_numeric(ons_total['Geração'], errors='coerce').fillna(0)
 
-ons_total['CEG'] = ons_total['CEG'].astype(str).str.replace('.', '', regex=False).str[:-2]  # Remover pontos e os últimos dois dígitos de cada valor na coluna CEG
+ons_total['CEG'] = ons_total['CEG'].astype(str).str.replace('.', '', regex=False).str[:15]  # Remover pontos e os últimos dois dígitos de cada valor na coluna CEG
 
 ons_total = ons_total[ons_total[metodo].isin(usinas_iema)]   # Considerar apenas usinas térmicas que possuem dados de emissão na IEMA
 
@@ -61,7 +61,7 @@ anos_int = list(map(int, anos))   # Transformar os itens da lista "anos" para o 
 ano_anterior = str(min(anos_int) - 1)
 ano_posterior = str(max(anos_int) + 1)
 
-anos_delta = set(list({ano_anterior, ano_posterior}))
+anos_delta = sorted(list({ano_anterior, ano_posterior}))
 
 for usina in usinas_iema:
     if len(ons_total.loc[ons_total[metodo] == usina]) == sum(horas):   # Verificar se a quantia de horas do DataFrame corresponde ao total de horas dos anos estudados
@@ -83,18 +83,30 @@ for usina in usinas_iema:
                 print(f'Arquivo PARQUET não encontrado para o ano {ano}.')
                 exit()
 
-            # Obter o valor de geração da usina nos anos vizinhos
             try:
-                valor_geracao = pd.to_numeric(df_delta.loc[(df_delta['nom_usina'] == usina) | (df_delta['ceg'] == usina), 'val_geracao'].iloc[-1], errors='coerce') # Converter para numérico
+                if metodo == 'Usina':
+                    df_delta = df_delta.loc[df_delta['nom_usina'] == usina]
+                else:
+                    df_delta['ceg'] = df_delta['ceg'].astype(str).str.replace('.', '', regex=False).str[:15]  # Remover pontos e os últimos dois dígitos de cada valor na coluna CEG
+                    df_delta = df_delta.loc[(df_delta['ceg'] == usina)]
+
+                data_geracao = df_delta['din_instante'].iloc[-1] if ano == ano_anterior else df_delta['din_instante'].iloc[0]
+                data_geracao = data_geracao.strftime('%Y-%m-%d %H:%M:%S')  # Converte para string no formato esperado
+
+                if data_geracao.startswith(f'{ano}-12-31') and data_geracao.endswith('23:00:00'):
+                    valor_geracao = pd.to_numeric(df_delta['val_geracao'].iloc[-1], errors='coerce')
+                elif data_geracao.startswith(f'{ano}-01-01') and data_geracao.endswith('00:00:00'):
+                    valor_geracao = pd.to_numeric(df_delta['val_geracao'].iloc[0], errors='coerce')
+
                 geracao_delta.append(valor_geracao)
             except IndexError:
                 geracao_delta.append(0)
                 print(f'Usina {usina} não encontrada para o ano {ano}. Adicionando valor 0.')
 
         # Gerar as colunas 'Delta menos' e 'Delta mais'
-        ons[usina]['Delta menos'] = ons[usina]['Geração'].diff()
-        ons[usina]['Delta mais'] = ons[usina]['Geração'].diff(-1) * -1
+        ons[usina]['Delta menos'] = ons[usina]['Geração'].diff().round(3)
+        ons[usina]['Delta mais'] = (ons[usina]['Geração'].diff(-1) * -1).round(3)
             
         # Calcular os valores corretos para os deltas nas bordas
-        ons[usina].loc[0,'Delta menos'] = ons[usina].loc[0,'Geração'] - geracao_delta[0]
-        ons[usina].loc[ons[usina].index[-1],'Delta mais'] = geracao_delta[1] - ons[usina].loc[ons[usina].index[-1],'Geração']
+        ons[usina].loc[0,'Delta menos'] = round(ons[usina].loc[0,'Geração'] - geracao_delta[0], 3)
+        ons[usina].loc[ons[usina].index[-1],'Delta mais'] = round(geracao_delta[1] - ons[usina].loc[ons[usina].index[-1],'Geração'], 3)
