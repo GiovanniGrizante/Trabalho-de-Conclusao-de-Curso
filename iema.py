@@ -6,7 +6,7 @@ import os
 metodo = 'CEG'  # Definir o método de identificação das usinas (pode ser 'CEG' ou 'Usina')
 relacao = {'CEG':'ceg', 'Usina':'nom_usina'}
 
-dir = 'G:\\Meu Drive\\Documentos UFSCar\\TCC\\IEMA\\Tabelas'
+dir = 'IEMA/Tabelas'
 
 anos = sorted([os.path.splitext(ano)[0] for ano in set(os.listdir(dir)) - {'desktop.ini'}])   #Listar e ordenar os arquivos de anos na pasta IEMA
 horas = {}  # Vetor para definir horas (linhas) dos anos estudados

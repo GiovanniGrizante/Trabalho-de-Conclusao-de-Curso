@@ -51,16 +51,12 @@ def formatacao_dataframe(ons_total, metodo, usinas_iema):
 # Este código acessa os dados da ONS armazenados em arquivos PARQUET, organiza as informações e separa os dados por usina térmica, 
 # considerando apenas aquelas que possuem dados de emissão na IEMA para todos os anos estudados.
 
-dir_ons = "G:\\Meu Drive\\Documentos UFSCar\\TCC\\ONS"
-
 ons = {}    # Variável para armazenar os dados das usinas térmicas
 ons_total = []  # Variável para armazenar todos os dados lidos
 
-# inicio = time.time()
-
 # Acessar o drive e armazenar os dados
 for ano in anos:
-    dir_ano = os.path.join(dir_ons, ano)
+    dir_ano = os.path.join("ONS", ano)
 
     # Listar e ordenar os arquivos PARQUET dentro do diretório do ano usando natsorted
     arq_parquet = natsorted([f for f in os.listdir(dir_ano) if f.endswith('.parquet')])
@@ -96,7 +92,7 @@ for usina in usinas_iema:
 
         # Acessar os dados dos anos vizinhos para calcular os deltas
         for ano in anos_delta:
-            dir_delta = os.path.join(dir_ons, ano)
+            dir_delta = os.path.join("ONS", ano)
 
             # Listar e ordenar os arquivos PARQUET dentro do diretório do ano usando natsorted
             arq_parquet = natsorted([f for f in os.listdir(dir_delta) if f.endswith('.parquet')])

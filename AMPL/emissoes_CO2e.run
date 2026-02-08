@@ -1,0 +1,54 @@
+#--------------
+# Tratamento dos dados
+
+# Transformar toneladas para kg:
+
+#for {i in ANO} {let emissoes[i] := emissoes[i]*1000};
+
+# Transformar MW para por unidade (p.u.):
+# S_base = 100 MVA
+
+for {a in ANO, h in HORARIO[a]} {
+    let pg[a,h] := pg[a,h] / S_base;
+    let delta_pg_ant[a,h] := delta_pg_ant[a,h] / S_base;
+    let delta_pg_pos[a,h] := delta_pg_pos[a,h] / S_base;
+};
+#--------------
+
+# Inicialização das variáveis:
+
+let Alpha_est := 0;
+let Beta_est := 0;
+let Gamma_est := 0;
+let Omega_est := 0;
+let Mu_est := 0;
+
+# Resolução do problema:
+
+solve Regressao_Estatica;
+
+# Resultados:
+
+# display MSE_est;
+# display Alpha_est, Beta_est, Gamma_est, Omega_est, Mu_est;
+
+#--------------
+
+let Alpha_din_ant := 0;
+let Beta_din_ant := 0;
+let Gamma_din_ant := 0;
+let Omega_din_ant := 0;
+let Mu_din_ant := 0;
+
+let Alpha_din_pos := 0;
+let Beta_din_pos := 0;
+let Gamma_din_pos := 0;
+let Omega_din_pos := 0;
+let Mu_din_pos := 0;
+
+solve Regressao_Dinamica;
+
+# display MSE_din;
+# display Alpha_est, Beta_est, Gamma_est, Omega_est, Mu_est, 
+#        Alpha_din_ant, Beta_din_ant, Gamma_din_ant, Omega_din_ant, Mu_din_ant,
+#        Alpha_din_pos, Beta_din_pos, Gamma_din_pos, Omega_din_pos, Mu_din_pos;

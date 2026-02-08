@@ -2,12 +2,14 @@ import os, pandas as pd
 from ons import ons
 from iema import emissoes, anos, horas
 
+# Tempo médio de execução: 5 min
+
 # Perguntar ao usuário o tipo de arquivo desejado
 tipo_arquivo = input("Qual o tipo de arquivo que deseja salvar? (1 - parquet / 2 - dat / 3 - Ambos): ")
 
 # Função para armazenar os dados no formato escolhido pelo usuário
-def criar_parquet(dir_base, usina, tab_ons, tab_iema):
-    dir = os.path.join(dir_base, 'Dados Tratados', usina, 'Dados de Geração')
+def criar_parquet(usina, tab_ons, tab_iema):
+    dir = os.path.join('Dados Tratados', usina, 'Dados de Geração')
 
     if os.path.exists(dir):
         if not os.path.isfile(f'{dir}\\ONS.parquet'):
@@ -19,8 +21,8 @@ def criar_parquet(dir_base, usina, tab_ons, tab_iema):
         tab_ons.to_parquet(f'{dir}\\ONS.parquet', index=False)
         tab_iema.to_parquet(f'{dir}\\IEMA.parquet', index=False)
 
-def criar_dat(dir_base, usina, horas, tab_ons, tab_iema):
-    dir = os.path.join(dir_base, 'AMPL', 'Usinas', usina)
+def criar_dat(usina, horas, tab_ons, tab_iema):
+    dir = os.path.join('AMPL', 'Usinas', usina)
 
     dat_content = 'data;\n\n'
 
@@ -30,7 +32,7 @@ def criar_dat(dir_base, usina, horas, tab_ons, tab_iema):
     # Horas respectivas a cada ano
     dat_content += f"param H :=\n"
     for ano in tab_iema['Ano']:
-        dat_content += f'{ano} {horas[ano]}\n'
+        dat_content += f'{ano} {horas[ano]-1}\n'
     dat_content += ';\n\n'
 
     # Formatar os dados para o arquivo .dat
@@ -54,16 +56,14 @@ def criar_dat(dir_base, usina, horas, tab_ons, tab_iema):
         f.write(dat_content)
 
 
-dir_base = f'G:\\Meu Drive\\Documentos UFSCar\\TCC'
-
 for usina in ons.keys():
     tab_ons = ons[usina]
     tab_iema = pd.DataFrame({'Ano': anos, 'Emissões': emissoes[usina]})
 
     if tipo_arquivo == '1':
-        criar_parquet(dir_base, usina, tab_ons, tab_iema)
+        criar_parquet(usina, tab_ons, tab_iema)
     elif tipo_arquivo == '2':
-        criar_dat(dir_base, usina, horas, tab_ons, tab_iema)
+        criar_dat(usina, horas, tab_ons, tab_iema)
     else:
-        criar_parquet(dir_base, usina, tab_ons, tab_iema)
-        criar_dat(dir_base, usina, horas, tab_ons, tab_iema)
+        criar_parquet(usina, tab_ons, tab_iema)
+        criar_dat(usina, horas, tab_ons, tab_iema)
