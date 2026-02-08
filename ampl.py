@@ -1,73 +1,38 @@
+import sys
 from amplpy import AMPL
 import pandas as pd
 import os
-from iema import anos
+from natsort import natsorted
 
-def ampl_model(ons_ampl,iema_ampl,usina):
-
+def ampl_model(dir, usina):
     # Inicializar o ambiente AMPL
     ampl = AMPL()
 
-    # Definir o modelo AMPL usando ampl.eval
-    ampl.eval(r'''
-            
-    set x;  # Quantidade de anos a serem estudados
-    set y;  # Quantidade de horas do ano
-              
-    param HorasAno{x};  # Número de horas para cada ano, considerando bissextos
-            
-    param PG{x,y};
-    param E{x};
+    # Carregar o arquivo .mod (modelo)
+    ampl.read(os.path.join(dir, 'emissoes_CO2e.mod'))
 
-    var alpha;
-    var beta;
-    var gamma;
-    var omega;
-    var mu;
+    # Carregar o arquivo .dat (dados)
+    ampl.read(os.path.join(dir, 'Usinas', usina, f'{usina}.dat'))
 
-    minimize Obj:
-        (1 / card{x}) * sum {i in x} (sum {j in y: j <= HorasAno[i] and PG[i,j] != 0} ((alpha * PG[i,j]^2 + beta * PG[i,j] + gamma + omega * exp(mu * PG[i,j]) - E[i])^2) + 1e-12);
-              
-    subject to ALPHA: alpha >= 0;
-    subject to BETA: beta >= 0;
-    subject to GAMMA: gamma >= -omega;
-    subject to OMEGA: omega >= 0;
-    subject to MU: mu >= 0;
-    ''')
+    # Definir o solver a ser utilizado
+    ampl.setOption('solver','D:\\Ipopt\\bin\\ipopt')
+    #ampl.eval("option solver ipopt;")
 
-    ampl.set['x'] = list(range(1,len(anos)+1))
-    ampl.set['y'] = list(range(1, 8784 + 1))
-
-    # Definindo o parâmetro 'HorasAno'
-    horas_ano = {}
-    for i, ano in enumerate(anos, start=1):
-        horas_ano[i] = 8784 if int(ano) % 4 == 0 else 8760
-    ampl.param['HorasAno'] = horas_ano
-
-    for i, ano in enumerate(anos, start=1):
-        for j, valor in enumerate(ons_ampl[i], start=1):
-            # Certifique-se de que 'j' está dentro do intervalo de horas para o ano 'ano'
-            if j <= horas_ano[i]:
-                ampl.eval(f'let PG[{i},{j}] := {valor};')
-
-    ampl.param['E'] = iema_ampl
-
-    # Resolver o modelo
-    ampl.setOption('solver','C:\\Users\\Giovanni\\Documents\\ipopt\\bin\\ipopt')
-    ampl.solve(ampl_model)
+    # Carregar o arquivo .run (execução)
+    ampl.eval(f'include "{os.path.join(dir,"emissoes_CO2e.run")}";')
 
     # Obter os valores das variáveis de decisão
-    alpha = ampl.var['alpha'].value()
-    beta = ampl.var['beta'].value()
-    gamma = ampl.var['gamma'].value()
-    omega = ampl.var['omega'].value()
-    mu = ampl.var['mu'].value()
+    # alpha = ampl.var['alpha'].value()
+    # beta = ampl.var['beta'].value()
+    # gamma = ampl.var['gamma'].value()
+    # omega = ampl.var['omega'].value()
+    # mu = ampl.var['mu'].value()
 
-    print(alpha)
-    print(beta)
-    print(gamma)
-    print(omega)
-    print(mu)
+    # print(alpha)
+    # print(beta)
+    # print(gamma)
+    # print(omega)
+    # print(mu)
 
     #Salvando os resultados
     # tab = pd.DataFrame({'Coeficientes':['Alpha','Beta','Gamma','Omega','Mu'],'Valores':[alpha,beta,gamma,omega,mu]})
@@ -75,3 +40,14 @@ def ampl_model(ons_ampl,iema_ampl,usina):
 
     #Limpando o modelo para disponibilizar armazenamento na memória
     #del ampl_model
+
+
+
+
+# Definição dos diretórios (Base e AMPL)
+dir = f'G:\\Meu Drive\\Documentos UFSCar\\TCC\\AMPL'
+
+# Definição dos dados a serem usado pelo modelo AMPL
+for usina in natsorted(os.listdir(os.path.join(dir, 'Usinas'))):
+    ampl_model(dir, usina)
+    sys.exit()
