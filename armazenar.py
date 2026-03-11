@@ -1,6 +1,7 @@
 import os, pandas as pd
-from ons import ons
+from ons import ons, grupos
 from iema import emissoes, anos, horas
+from collections import Counter
 
 # Tempo médio de execução: 5 min
 
@@ -9,13 +10,11 @@ tipo_arquivo = input("Qual o tipo de arquivo que deseja salvar? (1 - parquet / 2
 
 # Função para armazenar os dados no formato escolhido pelo usuário
 def criar_parquet(usina, tab_ons, tab_iema):
-    dir = os.path.join('Dados Tratados', usina, 'Dados de Geração')
+    dir = os.path.join('Dados Tratados', usina, 'Dados Externos')
 
     if os.path.exists(dir):
-        if not os.path.isfile(f'{dir}\\ONS.parquet'):
-            tab_ons.to_parquet(f'{dir}\\ONS.parquet', index=False)
-        if not os.path.isfile(f'{dir}\\IEMA.parquet'):
-            tab_iema.to_parquet(f'{dir}\\IEMA.parquet', index=False)
+        tab_ons.to_parquet(f'{dir}\\ONS.parquet', index=False)
+        tab_iema.to_parquet(f'{dir}\\IEMA.parquet', index=False)
     else:
         os.makedirs(f'{dir}')
         tab_ons.to_parquet(f'{dir}\\ONS.parquet', index=False)
