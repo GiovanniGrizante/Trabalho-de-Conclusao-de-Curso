@@ -1,10 +1,7 @@
 import os, pandas as pd, multiprocessing, sys, numpy as np
-# import tensorflow as tf
-# import h5py
+from iema import horas
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-# from sklearn.model_selection import train_test_split
-# from keras import backend as K  #Função para resetar a rede criada
 
 
 def tratamento_dados(iema_recente):
@@ -19,18 +16,24 @@ def tratamento_dados(iema_recente):
             unitarios = iema_recente[iema_recente['CEG'] == usina].drop(columns=['CEG']).reset_index(drop=True)
             
         # Unificação dos dados de geração, emissão e dados unitários
-        tabela = pd.merge(geracao, emissao, on=None, how='left').merge(unitarios, on=None, how='cross')
-        
-        # Remover colunas de delta. Caso desejar incluir, comentar linha abaixo.
-        tabela = tabela.drop(columns=['Delta menos', 'Delta mais'])
+        df = pd.merge(geracao, emissao, on=None, how='left').merge(unitarios, on=None, how='cross')
         
         
+        # == TRANSFORMAÇÃO DAS HORAS (ÍNDICE) EM VALORES CÍCLICOS ==
+        # Transformar o índice de horas em valores cíclicos para capturar a natureza periódica dos dados.
+        H = df['Ano'].map(horas)  # Obter o número de horas para cada ano
+        theta = 2 * np.pi * df['Índice'] / H  # Calcular o ângulo para cada hora
+
+        df['Cosseno Índice'] = np.cos(theta)
+        df['Seno Índice'] = np.sin(theta)
+
+
         # == FEATURES DE TRANSIÇÃO ==
         # Features importantes para a rede neural tratar as transições como um processo, e não como um estado fixo.
         
         # Duração da transição
         # Flag de transição (1 se estiver em transição, 0 caso contrário)
-        transicao_list = list((tabela['Categoria de geração'] == 0).astype(int))
+        transicao_list = list((df['Categoria de geração'] == 0).astype(int))
         duracao = np.zeros_like(transicao_list, dtype=int)
         contador = 0
         for i in range(len(transicao_list)):
@@ -39,7 +42,7 @@ def tratamento_dados(iema_recente):
             else:
                 contador = 0
             duracao[i] = contador
-        tabela['Duração da Transição'] = duracao
+        df['Duração da Transição'] = duracao
         
         # Fase da transição
         fase = np.zeros_like(transicao_list, dtype=int)
@@ -57,29 +60,42 @@ def tratamento_dados(iema_recente):
                 else:
                     # MEIO: pode ser hora 2 de 3, ou hora 2 de 4, etc.
                     fase[i] = 2  # MEIO (qualquer hora que não é início nem fim)
-        tabela['Fase da Transição'] = fase
+        df['Fase da Transição'] = fase
         
         # Definir as colunas categóricas e numéricas para o ColumnTransformer
         categoricas = ['Categoria de geração']
         numericas = ['Geração', 'Duração da Transição', 'Fase da Transição']  # Adicionar outras colunas numéricas, se necessário
-        
-        # Transformação da coluna categórica "Categoria de geração" em numérica e normalização da coluna numérica "Geração"
+
+        # Configurar o ColumnTransformer para aplicar OneHotEncoder nas colunas categóricas e StandardScaler nas colunas numéricas
         transf = ColumnTransformer(transformers=[
-            ('onehot', OneHotEncoder(sparse_output=False), categoricas),
+            ('onehot', OneHotEncoder(sparse_output=False, handle_unknown='ignore'), categoricas),
             ('scaler', StandardScaler(), numericas)],
                                    remainder='passthrough',  # Mantém constant_cols inalteradas
                                    verbose_feature_names_out=False  # Para nomes mais limpos
                                    )
         
-        data = transf.fit_transform(tabela)
+        # Separar os dados em treino, validação e teste com base no ano. Remover as colunas que não serão usadas como features.
+        x_tr = df[df['Ano'].astype(int) < 2023].reset_index(drop=True).drop(columns=['Delta menos', 'Delta mais', 'Índice', 'Ano'])
+        x_val = df[df['Ano'].astype(int) == 2023].reset_index(drop=True).drop(columns=['Delta menos', 'Delta mais', 'Índice', 'Ano'])
+        x_te = df[df['Ano'].astype(int) > 2023].reset_index(drop=True).drop(columns=['Delta menos', 'Delta mais', 'Índice', 'Ano'])
+
+        # Aplicar as transformações usando o ColumnTransformer.
+        # Apenas os dados de treino são ajustados (fit) para evitar vazamento de dados, 
+        # enquanto os dados de validação e teste são transformados (transform) usando os parâmetros ajustados no treino.
+        data_tr = transf.fit_transform(x_tr)
+        data_val = transf.transform(x_val)
+        data_te = transf.transform(x_te)
+
+        # Geração dos dataframes finais (Treino, Validação e Teste) com os nomes das colunas resultantes do ColumnTransformer.
+        df_tr = pd.DataFrame(data_tr, columns=transf.get_feature_names_out())
+        df_val = pd.DataFrame(data_val, columns=transf.get_feature_names_out())
+        df_te = pd.DataFrame(data_te, columns=transf.get_feature_names_out())
         
-        # Geração da tabela final
-        tabela = pd.DataFrame(data, columns=transf.get_feature_names_out())
-        
-        # Salvar a tabela unificada em formato parquet
-        os.makedirs(os.path.join('Dados Tratados', usina, 'Rede Neural'), exist_ok=True)
-        tabela.to_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados_Entrada.parquet'))
-        sys.exit()
+        # Salvar os dataframes em formato parquet
+        os.makedirs(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados'), exist_ok=True)
+        df_tr.to_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Treino.parquet'), index=False)
+        df_val.to_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Validação.parquet'), index=False)
+        df_te.to_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Teste.parquet'), index=False)
         
 
 # Ler a tabela mais recente do IEMA e filtrar os dados para as usinas presentes na pasta "Dados Tratados"
@@ -116,88 +132,3 @@ colunas = list(nomes_onehot) + list(colunas_restantes)
 
 iema_recente = pd.DataFrame(data,columns=colunas)
 tratamento_dados(iema_recente)
-
-
-
-# Mesclagem dos dados de geração com os dados de emissão
-# for usina in os.listdir('Dados Tratados'):
-    
-
-
-# # Tratamento específico dos dados
-
-# usinas_estudadas = ['Baixada Fluminense','Norte Fluminense','Santa Cruz','Termorio']
-# usina_serie = tab_trat['Usina']
-
-# if not usinas_estudadas:
-#     raise ValueError(f'Nenhuma usina a ser estudada.')
-# elif not all(usina in usinas for usina in usinas_estudadas):
-#     raise ValueError(f'Usinas não listadas.')
-
-# temp = []
-# for usina in usinas_estudadas:
-
-#     dir = f'G:\\Meu Drive\\Documentos UFSCar\\Iniciação Científica (Giovanni Grizante)\\Python\\Termelétricas (PANDAS)\\{usina}\\Emissões Sintéticas (Todos os anos)'
-#     arq = sorted([f for f in os.listdir(dir) if f.endswith('.csv')])
-
-#     for arquivo in arq:
-#         dir_comp = os.path.join(dir,arquivo)
-#         temp.append(pd.read_csv(dir_comp))
-
-#     emi = pd.concat(temp)
-
-
-# def preservar_usinas(x):
-#     return ', '.join(sorted(set(x)))
-
-# def verificar_combustiveis(x):
-#     combustiveis_unicos = sorted(set(x))
-#     if len(combustiveis_unicos) > 1:
-#         raise ValueError(f'Erro: Mais de um tipo de combustível encontrado: {', '.join(combustiveis_unicos)}')
-#     return combustiveis_unicos[0]
-                         
-# emi = emi.groupby(['Dia-Hora']).agg({
-#     'Usina': preservar_usinas,
-#     'Emissão': 'sum',             # Soma as emissões
-#     'Combustível': verificar_combustiveis
-# })
-
-# x = tab_trat[['ohe1','ohe2','ohe3','ohe4','ohe5','ohe6','ohe7','ohe8','Geração','Potência Instalada']]
-
-# # Definição das variáveis de treino e teste
-# sc = StandardScaler() # Transforma variáveis categóricas em numéricas
-# x = sc.fit_transform(x)
-
-# x = pd.DataFrame({'Coluna1': x[:, 0], 
-#                   'Coluna2': x[:, 1], 
-#                   'Coluna3': x[:, 2], 
-#                   'Coluna4': x[:, 3], 
-#                   'Coluna5': x[:, 4], 
-#                   'Coluna6': x[:, 5], 
-#                   'Coluna7': x[:, 6], 
-#                   'Coluna8': x[:, 7], 
-#                   'Geração': x[:, 8], 
-#                   'Potência Instalada': x[:, 9], 
-#                   'Usina': usina_serie,
-#                   'Dia-Hora': tab_trat['Dia-Hora']})
-
-# x = x.loc[x['Usina'].isin(usinas_estudadas)]
-
-# x = x.groupby(['Dia-Hora']).agg({
-#     'Usina': preservar_usinas,
-#     'Coluna1':'sum',
-#     'Coluna2':'sum',
-#     'Coluna3':'sum',
-#     'Coluna4':'sum',
-#     'Coluna5':'sum',
-#     'Coluna6':'sum',
-#     'Coluna7':'sum',
-#     'Coluna8':'sum',
-#     'Geração':'sum',
-#     'Potência Instalada': 'sum'
-# })
-
-# x = x.drop(['Usina'],axis=1)
-# y = emi['Emissão']
-
-# x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, shuffle=False)
