@@ -97,38 +97,38 @@ def tratamento_dados(iema_recente):
         df_val.to_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Validação.parquet'), index=False)
         df_te.to_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Teste.parquet'), index=False)
         
+def main():
+    # Ler a tabela mais recente do IEMA e filtrar os dados para as usinas presentes na pasta "Dados Tratados"
+    iema_recente = pd.read_excel(os.path.join('IEMA/Tabelas', sorted(os.listdir('IEMA/Tabelas'))[-1]))
 
-# Ler a tabela mais recente do IEMA e filtrar os dados para as usinas presentes na pasta "Dados Tratados"
-iema_recente = pd.read_excel(os.path.join('IEMA/Tabelas', sorted(os.listdir('IEMA/Tabelas'))[-1]))
+    colunas_remover = ['Município', 
+                    'Geração [GWh]', 
+                    'Emissões de Gases [tCO2]', 
+                    'Taxa de Emissão [tCO2/GWh]']
 
-colunas_remover = ['Município', 
-                   'Geração [GWh]', 
-                   'Emissões de Gases [tCO2]', 
-                   'Taxa de Emissão [tCO2/GWh]']
+    if os.listdir('Dados Tratados')[0][:3] == 'UTE':
+        iema_recente = iema_recente[iema_recente[f'CEG'].isin(os.listdir('Dados Tratados'))].reset_index(drop=True)
+        colunas_remover.append('Usina')
+    else:
+        iema_recente = iema_recente[iema_recente[f'Usina'].isin(os.listdir('Dados Tratados'))].reset_index(drop=True)
+        colunas_remover.append('CEG')
 
-if os.listdir('Dados Tratados')[0][:3] == 'UTE':
-    iema_recente = iema_recente[iema_recente[f'CEG'].isin(os.listdir('Dados Tratados'))].reset_index(drop=True)
-    colunas_remover.append('Usina')
-else:
-    iema_recente = iema_recente[iema_recente[f'Usina'].isin(os.listdir('Dados Tratados'))].reset_index(drop=True)
-    colunas_remover.append('CEG')
+    iema_recente = iema_recente.drop(columns=colunas_remover)
 
-iema_recente = iema_recente.drop(columns=colunas_remover)
+    # Converter os erros das colunas numéricas para NaN
+    for coluna in ['Potência Instalada', 'Fator de Capacidade [%]', 'Eficiência Energética [%]']:
+        iema_recente[coluna] = pd.to_numeric(iema_recente[coluna], errors='coerce')
 
-# Converter os erros das colunas numéricas para NaN
-for coluna in ['Potência Instalada', 'Fator de Capacidade [%]', 'Eficiência Energética [%]']:
-    iema_recente[coluna] = pd.to_numeric(iema_recente[coluna], errors='coerce')
+    # Aplicar OneHotEncoder (Transformação das colunas categóricas em numéricas) e manter as colunas numéricas
+    # É necessário aplicar esse processo para garantir que sejam analisadas todas as combinações possíveis.
+    # Após aplicar os dados em cada usina específica, as combinações se perdem.
+    onehot = ColumnTransformer(transformers=[('encoder',OneHotEncoder(),['Combustível','Ciclo de Operação'])],remainder='passthrough')
+    data = onehot.fit_transform(iema_recente)
 
-# Aplicar OneHotEncoder (Transformação das colunas categóricas em numéricas) e manter as colunas numéricas
-# É necessário aplicar esse processo para garantir que sejam analisadas todas as combinações possíveis.
-# Após aplicar os dados em cada usina específica, as combinações se perdem.
-onehot = ColumnTransformer(transformers=[('encoder',OneHotEncoder(),['Combustível','Ciclo de Operação'])],remainder='passthrough')
-data = onehot.fit_transform(iema_recente)
+    # Obter os nomes das colunas resultantes do OneHotEncoder e combinar com as colunas restantes
+    nomes_onehot = onehot.named_transformers_['encoder'].get_feature_names_out(['Combustível', 'Ciclo de Operação'])
+    colunas_restantes = iema_recente.drop(columns=['Combustível', 'Ciclo de Operação']).columns
+    colunas = list(nomes_onehot) + list(colunas_restantes)
 
-# Obter os nomes das colunas resultantes do OneHotEncoder e combinar com as colunas restantes
-nomes_onehot = onehot.named_transformers_['encoder'].get_feature_names_out(['Combustível', 'Ciclo de Operação'])
-colunas_restantes = iema_recente.drop(columns=['Combustível', 'Ciclo de Operação']).columns
-colunas = list(nomes_onehot) + list(colunas_restantes)
-
-iema_recente = pd.DataFrame(data,columns=colunas)
-tratamento_dados(iema_recente)
+    iema_recente = pd.DataFrame(data,columns=colunas)
+    tratamento_dados(iema_recente)

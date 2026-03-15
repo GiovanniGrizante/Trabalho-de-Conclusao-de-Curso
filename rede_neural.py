@@ -95,68 +95,70 @@ def modelo_rede_neural(usina, lookback, n_dyn, n_sta, horizon):
 
     return model, reduce_lr, early_stop, ckpt
 
-# Pergunta ao usuário se deseja retreinar os modelos ou usar os já treinados
-while True:
-    try:
-        treinar = bool(int(input("Retreinar modelos? (1 = Sim, 0 = Não): ")))
-        break
-    except ValueError:
-        print("Entrada inválida. Por favor, insira 1 para Sim ou 0 para Não.\n")
 
-# Loop para cada usina: carrega os dados, realiza o janelamento, treina o modelo (se necessário) e avalia no teste
-for usina in os.listdir('Dados Tratados'):
-    df_tr = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Treino.parquet'))
-    df_val = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Validação.parquet'))
-    df_te = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Teste.parquet'))
+def main():
+    # Pergunta ao usuário se deseja retreinar os modelos ou usar os já treinados
+    while True:
+        try:
+            treinar = bool(int(input("Retreinar modelos? (1 = Sim, 0 = Não): ")))
+            break
+        except ValueError:
+            print("Entrada inválida. Por favor, insira 1 para Sim ou 0 para Não.\n")
 
-    # Coluna alvo: o que queremos prever
-    target_col = 'Emissão'
+    # Loop para cada usina: carrega os dados, realiza o janelamento, treina o modelo (se necessário) e avalia no teste
+    for usina in os.listdir('Dados Tratados'):
+        df_tr = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Treino.parquet'))
+        df_val = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Validação.parquet'))
+        df_te = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Teste.parquet'))
 
-    # Dinâmicas: variáveis que mudam ao longo do tempo
-    dyn_cols = (
-        [c for c in df_tr.columns if c.startswith("Categoria de geração_")] +
-        ["Geração", "Duração da Transição", "Fase da Transição",
-        "Seno Índice", "Cosseno Índice"]
-    )
+        # Coluna alvo: o que queremos prever
+        target_col = 'Emissão'
 
-    # Estáticas: constantes/one-hot nos dados originais
-    static_cols = (
-        ["Potência Instalada", "Eficiência Energética [%]", "Fator de Capacidade [%]"] +
-        [c for c in df_tr.columns if c.startswith("Combustível_")] +
-        [c for c in df_tr.columns if c.startswith("Ciclo de Operação_")]
-    )
-
-    Xtr_seq, Xtr_sta, ytr = janelamento(df_tr, dyn_cols, static_cols, target_col)
-    Xva_seq, Xva_sta, yva = janelamento(df_val, dyn_cols, static_cols, target_col)
-    Xte_seq, Xte_sta, yte = janelamento(df_te, dyn_cols, static_cols, target_col)
-
-    lookback = Xtr_seq.shape[1]   # Período de observação (Alterar na função "janelamento")
-    horizon = ytr.shape[1]        # Período de previsão (Alterar na função "janelamento")
-    n_dyn = Xtr_seq.shape[2]      # Número de variáveis dinâmicas
-    n_sta = Xtr_sta.shape[1]      # Número de variáveis estáticas
-
-    os.makedirs(os.path.join("Dados Tratados", usina, 'Rede Neural', 'Históricos'), exist_ok=True)
-
-    if os.path.exists(os.path.join("Dados Tratados", usina, 'Rede Neural', 'Modelos', "Best.keras")) and treinar == False:
-        model = load_model(os.path.join("Dados Tratados", usina, 'Rede Neural', 'Modelos', "Best.keras"))
-    else:
-        model, reduce_lr, early_stop, ckpt = modelo_rede_neural(usina, lookback, n_dyn, n_sta, horizon)
-
-        treino = model.fit(
-            x=[Xtr_seq, Xtr_sta], y=ytr,
-            validation_data=([Xva_seq, Xva_sta], yva),
-            epochs=100,     # Número máximo de épocas para o treinamento (pode ser interrompido pelo EarlyStopping)
-            batch_size=256, # Tamanho do lote para o treinamento (número de amostras processadas antes de atualizar os pesos do modelo)
-            callbacks=[reduce_lr, early_stop, ckpt],
-            verbose=0   # Exibe o progresso do treinamento a cada época (0 = sem saída, 1 = barra de progresso, 2 = uma linha por época)
+        # Dinâmicas: variáveis que mudam ao longo do tempo
+        dyn_cols = (
+            [c for c in df_tr.columns if c.startswith("Categoria de geração_")] +
+            ["Geração", "Duração da Transição", "Fase da Transição",
+            "Seno Índice", "Cosseno Índice"]
         )
 
-        treino_df = pd.DataFrame(treino.history)  # loss, mae, mse, val_loss, val_mae, val_mse...
-        treino_df.insert(0, "epoch", np.arange(1, len(treino_df) + 1))  # Adiciona a coluna "epoch"
-        treino_df.to_parquet(os.path.join("Dados Tratados", usina, 'Rede Neural', 'Históricos', "Treino.parquet"), index=False)
+        # Estáticas: constantes/one-hot nos dados originais
+        static_cols = (
+            ["Potência Instalada", "Eficiência Energética [%]", "Fator de Capacidade [%]"] +
+            [c for c in df_tr.columns if c.startswith("Combustível_")] +
+            [c for c in df_tr.columns if c.startswith("Ciclo de Operação_")]
+        )
 
-    # Avaliação final no teste
-    teste = model.evaluate([Xte_seq, Xte_sta], yte, verbose=0)
-    teste_df = pd.DataFrame([teste], columns=model.metrics_names)  # loss, mae, mse
-    teste_df.insert(0, "usina", usina)  # Adiciona a coluna "usina"
-    teste_df.to_parquet(os.path.join("Dados Tratados", usina, 'Rede Neural', 'Históricos', "Teste.parquet"), index=False)
+        Xtr_seq, Xtr_sta, ytr = janelamento(df_tr, dyn_cols, static_cols, target_col)
+        Xva_seq, Xva_sta, yva = janelamento(df_val, dyn_cols, static_cols, target_col)
+        Xte_seq, Xte_sta, yte = janelamento(df_te, dyn_cols, static_cols, target_col)
+
+        lookback = Xtr_seq.shape[1]   # Período de observação (Alterar na função "janelamento")
+        horizon = ytr.shape[1]        # Período de previsão (Alterar na função "janelamento")
+        n_dyn = Xtr_seq.shape[2]      # Número de variáveis dinâmicas
+        n_sta = Xtr_sta.shape[1]      # Número de variáveis estáticas
+
+        os.makedirs(os.path.join("Dados Tratados", usina, 'Rede Neural', 'Históricos'), exist_ok=True)
+
+        if os.path.exists(os.path.join("Dados Tratados", usina, 'Rede Neural', 'Modelos', "Best.keras")) and treinar == False:
+            model = load_model(os.path.join("Dados Tratados", usina, 'Rede Neural', 'Modelos', "Best.keras"))
+        else:
+            model, reduce_lr, early_stop, ckpt = modelo_rede_neural(usina, lookback, n_dyn, n_sta, horizon)
+
+            treino = model.fit(
+                x=[Xtr_seq, Xtr_sta], y=ytr,
+                validation_data=([Xva_seq, Xva_sta], yva),
+                epochs=100,     # Número máximo de épocas para o treinamento (pode ser interrompido pelo EarlyStopping)
+                batch_size=256, # Tamanho do lote para o treinamento (número de amostras processadas antes de atualizar os pesos do modelo)
+                callbacks=[reduce_lr, early_stop, ckpt],
+                verbose=0   # Exibe o progresso do treinamento a cada época (0 = sem saída, 1 = barra de progresso, 2 = uma linha por época)
+            )
+
+            treino_df = pd.DataFrame(treino.history)  # loss, mae, mse, val_loss, val_mae, val_mse...
+            treino_df.insert(0, "epoch", np.arange(1, len(treino_df) + 1))  # Adiciona a coluna "epoch"
+            treino_df.to_parquet(os.path.join("Dados Tratados", usina, 'Rede Neural', 'Históricos', "Treino.parquet"), index=False)
+
+        # Avaliação final no teste
+        teste = model.evaluate([Xte_seq, Xte_sta], yte, verbose=0)
+        teste_df = pd.DataFrame([teste], columns=model.metrics_names)  # loss, mae, mse
+        teste_df.insert(0, "usina", usina)  # Adiciona a coluna "usina"
+        teste_df.to_parquet(os.path.join("Dados Tratados", usina, 'Rede Neural', 'Históricos', "Teste.parquet"), index=False)

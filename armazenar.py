@@ -3,11 +3,6 @@ from ons import ons, grupos
 from iema import emissoes, anos, horas
 from collections import Counter
 
-# Tempo médio de execução: 5 min
-
-# Perguntar ao usuário o tipo de arquivo desejado
-tipo_arquivo = input("Qual o tipo de arquivo que deseja salvar? (1 - parquet / 2 - dat / 3 - Ambos): ")
-
 # Função para armazenar os dados no formato escolhido pelo usuário
 def criar_parquet(usina, tab_ons, tab_iema):
     dir = os.path.join('Dados Tratados', usina, 'Dados Externos')
@@ -54,15 +49,18 @@ def criar_dat(usina, horas, tab_ons, tab_iema):
     with open(arq, 'w') as f:
         f.write(dat_content)
 
+def main():
+    # Perguntar ao usuário o tipo de arquivo desejado
+    tipo_arquivo = input("Qual o tipo de arquivo que deseja salvar? (1 - parquet / 2 - dat / 3 - Ambos): ")
 
-for usina in ons.keys():
-    tab_ons = ons[usina]
-    tab_iema = pd.DataFrame({'Ano': anos, 'Emissões': emissoes[usina]})
+    for usina in ons.keys():
+        tab_ons = ons[usina]
+        tab_iema = pd.DataFrame({'Ano': anos, 'Emissões': emissoes[usina]})
 
-    if tipo_arquivo == '1':
-        criar_parquet(usina, tab_ons, tab_iema)
-    elif tipo_arquivo == '2':
-        criar_dat(usina, horas, tab_ons, tab_iema)
-    else:
-        criar_parquet(usina, tab_ons, tab_iema)
-        criar_dat(usina, horas, tab_ons, tab_iema)
+        if tipo_arquivo == '1':
+            criar_parquet(usina, tab_ons, tab_iema)
+        elif tipo_arquivo == '2':
+            criar_dat(usina, horas, tab_ons, tab_iema)
+        else:
+            criar_parquet(usina, tab_ons, tab_iema)
+            criar_dat(usina, horas, tab_ons, tab_iema)

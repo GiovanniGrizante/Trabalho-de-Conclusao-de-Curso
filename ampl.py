@@ -3,7 +3,7 @@ import pandas as pd
 import os, time
 import multiprocessing
 
-# Tempo médio de execução para 55 usinas: 2h40min
+# Tempo médio de execução para 55 usinas em 1 thread: 2h40min
 
 def ampl_model(usina):
     # Inicializar o ambiente AMPL
@@ -56,48 +56,52 @@ def ampl_model(usina):
     os.makedirs(f'Dados Tratados\\{usina}\\Emissões Sintéticas', exist_ok=True)
     tab.to_parquet(f'Dados Tratados\\{usina}\\Emissões Sintéticas\\Coeficientes.parquet',index=False)
 
-    
-# Para que o multiprocessamento seja ativado, é necessário que o código seja executado dentro do arquivo principal (main)
-if __name__ == '__main__':
-    
-    # Determinar número de threads a serem utilizadas
-    num_nucleos = int(input(f'Número de threads a serem utilizadas (máximo {multiprocessing.cpu_count() - 1}): '))
-
-    if num_nucleos < 1 or num_nucleos > multiprocessing.cpu_count() - 1:
-        raise ValueError(f'Número de threads deve ser entre 1 e {multiprocessing.cpu_count() - 1}.')
-
-
-    usinas = os.listdir('Dados Tratados')
-
-    # Lista para armazenar os processos
-    processos = []
-
-    # Índice para controlar qual usina será processada
-    indice_usina = 0
-
-    # Enquanto houver usinas para processar
-    while indice_usina < len(usinas):
-        # Iniciar novos processos até atingir o limite de núcleos
-        while len(processos) < num_nucleos and indice_usina < len(usinas):
-            usina_atual = usinas[indice_usina]
-            
-            # Criar e iniciar processo para a usina atual
-            p = multiprocessing.Process(target=ampl_model, args=(usina_atual,))
-            processos.append(p)
-            p.start()
-            
-            indice_usina += 1
+def main():
+    # Para que o multiprocessamento seja ativado, é necessário que o código seja executado dentro do arquivo principal (main)
+    if __name__ == '__main__':
         
-        # Verificar processos que já terminaram
-        for p in processos[:]:  # Iterar sobre cópia da lista
-            if not p.is_alive():
-                p.join()  # Garantir que o processo foi finalizado
-                processos.remove(p)  # Remover da lista de processos ativos
-        
-        # Pequena pausa para evitar uso excessivo de CPU na verificação
-        if len(processos) >= num_nucleos:
-            time.sleep(0.1)
+        # Determinar número de threads a serem utilizadas
+        num_nucleos = int(input(f'Número de threads a serem utilizadas (máximo {multiprocessing.cpu_count() - 1}): '))
 
-    # Aguardar todos os processos restantes terminarem
-    for p in processos:
-        p.join()
+        if num_nucleos < 1 or num_nucleos > multiprocessing.cpu_count() - 1:
+            raise ValueError(f'Número de threads deve ser entre 1 e {multiprocessing.cpu_count() - 1}.')
+
+        usinas = os.listdir('Dados Tratados')
+
+        # Lista para armazenar os processos
+        processos = []
+
+        # Índice para controlar qual usina será processada
+        indice_usina = 0
+
+        # Enquanto houver usinas para processar
+        while indice_usina < len(usinas):
+            # Iniciar novos processos até atingir o limite de núcleos
+            while len(processos) < num_nucleos and indice_usina < len(usinas):
+                usina_atual = usinas[indice_usina]
+                
+                # Criar e iniciar processo para a usina atual
+                p = multiprocessing.Process(target=ampl_model, args=(usina_atual,))
+                processos.append(p)
+                p.start()
+                
+                indice_usina += 1
+            
+            # Verificar processos que já terminaram
+            for p in processos[:]:  # Iterar sobre cópia da lista
+                if not p.is_alive():
+                    p.join()  # Garantir que o processo foi finalizado
+                    processos.remove(p)  # Remover da lista de processos ativos
+            
+            # Pequena pausa para evitar uso excessivo de CPU na verificação
+            if len(processos) >= num_nucleos:
+                time.sleep(0.1)
+
+        # Aguardar todos os processos restantes terminarem
+        for p in processos:
+            p.join()
+
+    else:
+        print('Para ativar o multiprocessamento, execute o arquivo ampl.py')
+        for usina in os.listdir('Dados Tratados'):
+            ampl_model(usina)
