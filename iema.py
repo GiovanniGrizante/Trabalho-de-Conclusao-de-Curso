@@ -31,3 +31,10 @@ def main():
         for usina in usinas_iema:
             emissoes[usina].append(
                 iema[ano].loc[iema[ano][metodo] == usina, 'Emissões de Gases [tCO2]'].values[0])
+            
+    return {'horas': horas, 
+            'anos': anos, 
+            'usinas_iema': usinas_iema,
+            'metodo': metodo,
+            'relacao': relacao,
+            'emissoes': emissoes}

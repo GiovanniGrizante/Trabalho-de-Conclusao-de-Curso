@@ -100,7 +100,7 @@ def main():
     # Pergunta ao usuário se deseja retreinar os modelos ou usar os já treinados
     while True:
         try:
-            treinar = bool(int(input("Retreinar modelos? (1 = Sim, 0 = Não): ")))
+            treinar = bool(int(input("Retreinar modelos? (1 - Sim | 0 - Não): ")))
             break
         except ValueError:
             print("Entrada inválida. Por favor, insira 1 para Sim ou 0 para Não.\n")

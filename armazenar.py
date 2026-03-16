@@ -1,7 +1,4 @@
 import os, pandas as pd
-from ons import ons, grupos
-from iema import emissoes, anos, horas
-from collections import Counter
 
 # Função para armazenar os dados no formato escolhido pelo usuário
 def criar_parquet(usina, tab_ons, tab_iema):
@@ -49,13 +46,14 @@ def criar_dat(usina, horas, tab_ons, tab_iema):
     with open(arq, 'w') as f:
         f.write(dat_content)
 
-def main():
+def main(dados_iema, dados_ons):
     # Perguntar ao usuário o tipo de arquivo desejado
     tipo_arquivo = input("Qual o tipo de arquivo que deseja salvar? (1 - parquet / 2 - dat / 3 - Ambos): ")
-
-    for usina in ons.keys():
-        tab_ons = ons[usina]
-        tab_iema = pd.DataFrame({'Ano': anos, 'Emissões': emissoes[usina]})
+    
+    horas = dados_iema['horas']
+    for usina in dados_ons.keys():
+        tab_ons = dados_ons[usina]
+        tab_iema = pd.DataFrame({'Ano': dados_iema['anos'], 'Emissões': dados_iema['emissoes'[usina]]})
 
         if tipo_arquivo == '1':
             criar_parquet(usina, tab_ons, tab_iema)

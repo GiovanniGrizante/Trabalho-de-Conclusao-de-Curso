@@ -2,37 +2,55 @@ import iema, ons, armazenar, ampl, sinteticas
 import tratamento_rede, rede_neural
 import graficos, graficos_aux
 
-# Ordem de execução dos arquivos.
+import tabulate as tab
+import os, time
 
-# Etapa 1 - Tratamento e armazenamento dos dados IEMA e ONS para minimização.
-etapa1 = input('Deseja executar a etapa 1? (1 - Sim | 2 - Não) ')
-if etapa1 == '1':
-    iema.main()
-    ons.main()
-    armazenar.main()
-else:
-    pass
-
-#Etapa 2 - Execução da minimização e geração das emissões sintéticas.
-etapa2 = input('Deseja executar a etapa 2? (1 - Sim | 2 - Não) ')
-if etapa2 == '1':
-    ampl.main()
-    sinteticas.main()
-else:
-    pass
-
-# Etapa 3 - Tratamento dos dados, criação e execução da rede neural.
-etapa3 = input('Deseja executar a etapa 3? (1 - Sim | 2 - Não) ')
-if etapa3 == '1':
-    tratamento_rede.main()
-    rede_neural.main()
-else:
-    pass
-
-# Etapa 4 - Geração dos gráficos. 
-etapa4 = input('Deseja executar a etapa 4? (1 - Sim | 2 - Não) ')
-if etapa4 == '1':
-    graficos.main()
-    graficos_aux.main()
-else:
-    pass
+def gerar_tabela():
+    conteudo = [
+        ['Etapa 1', 'iema.py\nons.py\narmazenar.py', 'Processa os dados ONS e IEMA'],
+        ['Etapa 2', 'ampl.py\nsinteticas.py', 'Encontra os coeficientes e emissões sintéticas.'],
+        ['Etapa 3', 'tratamento_rede.py\nrede_neural.py', 'Trata os dados e executa o modelo de rede neural.'],
+        ['Etapa 4', 'graficos.py\ngraficos_aux.py', 'Gera os gráficos das usinas.']
+    ]
+    
+    cabecalho = ['Etapas', 'Arquivos', 'Descrição']
+    
+    print('=== Etapas do Pipeline ===')
+    print(tab.tabulate(conteudo, headers = cabecalho, tablefmt = 'grid'))
+    # Outros formatos: "simple", "plain", "grid", "fancy_grid", "pipe", "orgtbl", "jira", "presto", "pretty"
+    
+def perguntar_etapa(num):
+    while True:
+        resposta = input(f'Deseja executar a etapa {num}? (1 - Sim | 0 - Não): ')
+        if resposta in ['0','1']:
+            return resposta
+        print('Entrada inválida. Por favor, insira (1 - Sim | 0 - Não)')
+        time.sleep(4)
+    
+def executar_arq():
+    
+    dados = {
+        'iema': None,
+        'ons': None
+    }
+    
+    etapas = {
+        1: [lambda: dados.update({'iema': iema.main()}), 
+            lambda: dados.update({'ons': ons.main(dados['iema'])}), 
+            lambda: armazenar.main(dados['iema'], dados['ons'])],
+        2: [lambda: ampl.main()],
+        3: [lambda: sinteticas.main(), lambda: tratamento_rede.main()],
+        4: [lambda: rede_neural.main()],
+        5: [lambda: graficos.main(), lambda: graficos_aux.main()]
+    }
+    
+    for num in etapas.keys():
+        os.system('cls')
+        gerar_tabela()
+        resposta = perguntar_etapa(num)
+        
+        if resposta == '1':
+            for func in etapas[num]:
+                func()
+                
+executar_arq()

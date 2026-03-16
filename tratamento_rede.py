@@ -1,5 +1,4 @@
 import os, pandas as pd, multiprocessing, sys, numpy as np
-from iema import horas
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -21,6 +20,10 @@ def tratamento_dados(iema_recente):
         
         # == TRANSFORMAÇÃO DAS HORAS (ÍNDICE) EM VALORES CÍCLICOS ==
         # Transformar o índice de horas em valores cíclicos para capturar a natureza periódica dos dados.
+        horas = {}
+        anos = sorted([os.path.splitext(ano)[0] for ano in set(os.listdir('IEMA/Tabelas')) - {'desktop.ini'}])
+        for ano in anos:
+            horas[ano] = 8784 if int(ano) % 4 == 0 else 8760
         H = df['Ano'].map(horas)  # Obter o número de horas para cada ano
         theta = 2 * np.pi * df['Índice'] / H  # Calcular o ângulo para cada hora
 

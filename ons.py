@@ -1,11 +1,10 @@
 import pandas as pd
 import os
 from natsort import natsorted
-from iema import horas, anos, usinas_iema, metodo, relacao
 
 # Funções auxiliares
 
-def formatacao_dataframe(ons_total, metodo, usinas_iema):
+def formatacao_dataframe(ons_total, metodo, usinas_iema, relacao):
 
     # Remover pontos e os últimos dois dígitos de cada valor na coluna CEG
     ons_total[relacao[metodo]] = ons_total[relacao[metodo]].astype(str).str.replace('.', '', regex=False).str[:15]
@@ -248,9 +247,16 @@ def categorizar_geracao(usina, geracao, limiar=15):
 # Este código acessa os dados da ONS armazenados em arquivos PARQUET, organiza as informações e separa os dados por usina térmica, 
 # considerando apenas aquelas que possuem dados de emissão na IEMA para todos os anos estudados.
 
-def main():
+def main(dados_iema):
     ons = {}    # Variável para armazenar os dados das usinas térmicas
     ons_total = []  # Variável para armazenar todos os dados lidos
+    
+    # Variáveis do arquivo iema.py
+    horas = dados_iema['horas']
+    anos = dados_iema['anos']
+    usinas_iema = dados_iema['usinas_iema']
+    metodo = dados_iema['metodo']
+    relacao = dados_iema['relacao']
 
     # Acessar o drive e armazenar os dados
     for ano in anos:
@@ -265,12 +271,11 @@ def main():
             # Concatenar os DataFrames do ano e adicionar à lista total
             ons_total.append(df_ano)
 
-
     # Concatenar todos os DataFrames dos anos em um único DataFrame final
     ons_total = pd.concat(ons_total, ignore_index=True)
 
     # Atualizar o DataFrame com o valor retornado pela função
-    ons_total = formatacao_dataframe(ons_total, metodo, usinas_iema)
+    ons_total = formatacao_dataframe(ons_total, metodo, usinas_iema, relacao)
 
     # Calcular os anos para os deltas
     anos_int = list(map(int, anos))   # Transformar os itens da lista "anos" para o tipo int
@@ -345,3 +350,5 @@ def main():
 
             # Reorganizar as colunas
             ons[usina] = ons[usina][['Ano', 'Índice', 'Geração','Categoria de geração', 'Delta menos', 'Delta mais']]
+            
+            return {'ons': ons}

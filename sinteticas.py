@@ -1,9 +1,14 @@
 import pandas as pd
 import os
 import numpy as np
-from iema import anos, horas
 
 def main():
+    
+    horas = {}
+    anos =  sorted([os.path.splitext(ano)[0] for ano in set(os.listdir('IEMA/Tabelas')) - {'desktop.ini'}])
+    for ano in anos:
+        horas[ano] = 8784 if int(ano) % 4 == 0 else 8760
+    
     for usina in os.listdir('Dados Tratados'):
         horas_expandidas = []
         anos_expandidos = []
