@@ -1,0 +1,10 @@
+# Gerado com pipreqs (pipreqs ./ --encoding=utf-8 --force)
+# Para instalar - pip install -r requirements.txt
+
+amplpy==0.16.0
+natsort==8.4.0
+numpy==2.4.3
+pandas==3.0.1
+scikit_learn==1.8.0
+tabulate==0.9.0
+torch==2.12.0.dev20260316+cu128     # Alterar versão para a que atenda a GPU atual
