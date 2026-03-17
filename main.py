@@ -1,16 +1,18 @@
-import iema, ons, armazenar, ampl, sinteticas
-import tratamento_rede, rede_neural
-import graficos, graficos_aux
-
 import tabulate as tab
 import os, time
 
+from Arquivos import iema, ons, armazenar, ampl, sinteticas
+from Arquivos import tratamento_rede, rede_neural
+from Arquivos import graficos, graficos_aux
+
+
 def gerar_tabela():
     conteudo = [
-        ['Etapa 1', 'iema.py\nons.py\narmazenar.py', 'Processa os dados ONS e IEMA'],
-        ['Etapa 2', 'ampl.py\nsinteticas.py', 'Encontra os coeficientes e emissões sintéticas.'],
-        ['Etapa 3', 'tratamento_rede.py\nrede_neural.py', 'Trata os dados e executa o modelo de rede neural.'],
-        ['Etapa 4', 'graficos.py\ngraficos_aux.py', 'Gera os gráficos das usinas.']
+        ['Etapa 1', 'iema.py\nons.py\narmazenar.py', 'Processa os dados ONS e IEMA.'],
+        ['Etapa 2', 'ampl.py', 'Encontra os coeficientes.'],
+        ['Etapa 3', 'sinteticas.py\ntratamento_rede.py', 'Gera as emissões sintéticas e trata os dados.'],
+        ['Etapa 4', 'rede_neural.py', 'Executa o modelo de rede neural (GRU + Dense).'],
+        ['Etapa 5', 'graficos.py\ngraficos_aux.py', 'Gera os gráficos das usinas.']
     ]
     
     cabecalho = ['Etapas', 'Arquivos', 'Descrição']
@@ -18,17 +20,8 @@ def gerar_tabela():
     print('=== Etapas do Pipeline ===')
     print(tab.tabulate(conteudo, headers = cabecalho, tablefmt = 'grid'))
     # Outros formatos: "simple", "plain", "grid", "fancy_grid", "pipe", "orgtbl", "jira", "presto", "pretty"
-    
-def perguntar_etapa(num):
-    while True:
-        resposta = input(f'Deseja executar a etapa {num}? (1 - Sim | 0 - Não): ')
-        if resposta in ['0','1']:
-            return resposta
-        print('Entrada inválida. Por favor, insira (1 - Sim | 0 - Não)')
-        time.sleep(4)
-    
-def executar_arq():
-    
+   
+def executar_etapas():
     dados = {
         'iema': None,
         'ons': None
@@ -41,16 +34,29 @@ def executar_arq():
         2: [lambda: ampl.main()],
         3: [lambda: sinteticas.main(), lambda: tratamento_rede.main()],
         4: [lambda: rede_neural.main()],
-        5: [lambda: graficos.main(), lambda: graficos_aux.main()]
+        #5: [lambda: graficos.main(), lambda: graficos_aux.main()]
     }
     
-    for num in etapas.keys():
+    return etapas
+    
+def perguntar_etapas(etapas):
+    while True:
         os.system('cls')
         gerar_tabela()
-        resposta = perguntar_etapa(num)
+        num = int(input(f'Digite a etapa a ser executada (Em branco para todas): '))
         
-        if resposta == '1':
+        if num in etapas.keys():
             for func in etapas[num]:
                 func()
+        elif num == '':
+            for num in etapas.keys():
+                for func in etapas[num]:
+                    func()
                 
-executar_arq()
+        print('Etapa inválida.')
+        time.sleep(4)
+    
+
+if __name__ == '__main__':
+    etapas = executar_etapas()
+    perguntar_etapas(etapas)
