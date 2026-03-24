@@ -34,7 +34,7 @@ def executar_etapas():
         2: [lambda: ampl.main()],
         3: [lambda: sinteticas.main(), lambda: tratamento_rede.main()],
         4: [lambda: rede_neural.main()],
-        #5: [lambda: graficos.main(), lambda: graficos_aux.main()]
+        5: [lambda: graficos.main()]
     }
     
     return etapas

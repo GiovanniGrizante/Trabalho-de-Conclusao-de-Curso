@@ -93,8 +93,8 @@ def treinar_modelo(model, train_loader, val_loader, epochs=100, patience=10):
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     
     # Loss functions
-    criterion = nn.L1Loss()  # MAE
-    mse_loss = nn.MSELoss()
+    criterion_mae = nn.L1Loss()  # MAE
+    criterion_mse = nn.MSELoss()  # MSE
     
     # Learning rate scheduler
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
@@ -126,13 +126,16 @@ def treinar_modelo(model, train_loader, val_loader, epochs=100, patience=10):
             
             optimizer.zero_grad()
             output = model(x_seq, x_sta)
-            loss = criterion(output, y)
+            
+            # Calcular loss
+            loss = criterion_mae(output, y)
             loss.backward()
             optimizer.step()
             
+            # Acumular métricas
             train_loss += loss.item()
-            train_mae += loss.item()
-            train_mse += mse_loss(output, y).item()
+            train_mae += criterion_mae(output, y).item()
+            train_mse += criterion_mse(output, y).item()
         
         train_loss /= len(train_loader)
         train_mae /= len(train_loader)
@@ -151,26 +154,26 @@ def treinar_modelo(model, train_loader, val_loader, epochs=100, patience=10):
                 y = y.to(device)
                 
                 output = model(x_seq, x_sta)
-                loss = criterion(output, y)
                 
-                val_loss += loss.item()
-                val_mae += loss.item()
-                val_mse += mse_loss(output, y).item()
+                # Calcular métricas
+                val_loss += criterion_mae(output, y).item()
+                val_mae += criterion_mae(output, y).item()
+                val_mse += criterion_mse(output, y).item()
         
         val_loss /= len(val_loader)
         val_mae /= len(val_loader)
         val_mse /= len(val_loader)
         
-        # Atualizar scheduler
-        scheduler.step(val_loss)
-        
-        # Salvar histórico
+        # Salvar no histórico
         history['loss'].append(train_loss)
         history['mae'].append(train_mae)
         history['mse'].append(train_mse)
         history['val_loss'].append(val_loss)
         history['val_mae'].append(val_mae)
         history['val_mse'].append(val_mse)
+        
+        # Atualizar scheduler
+        scheduler.step(val_loss)
         
         # Early stopping
         if val_loss < best_val_loss:
@@ -180,12 +183,18 @@ def treinar_modelo(model, train_loader, val_loader, epochs=100, patience=10):
         else:
             patience_counter += 1
             if patience_counter >= patience:
+                print(f"Early stopping na época {epoch}")
                 break
+                
+        # Print a cada época (opcional)
+        if epoch % 10 == 0:
+            print(f"Época {epoch}: Train Loss={train_loss:.4f}, Val Loss={val_loss:.4f}")
     
-    # Restaurar melhores pesos
+    # ✅ RESTAURAR MELHORES PESOS
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
     
+    # ✅ RETORNAR MODELO E HISTÓRICO (ERA ISSO QUE FALTAVA!)
     return model, history
 
 # Função para avaliar o modelo no teste
@@ -198,8 +207,8 @@ def avaliar_modelo(model, test_loader):
     test_mae = 0
     test_mse = 0
     
-    criterion = nn.L1Loss()
-    mse_loss = nn.MSELoss()
+    criterion_mae = nn.L1Loss()
+    criterion_mse = nn.MSELoss()
     
     with torch.no_grad():
         for x_seq, x_sta, y in test_loader:
@@ -208,9 +217,11 @@ def avaliar_modelo(model, test_loader):
             y = y.to(device)
             
             output = model(x_seq, x_sta)
-            test_loss += criterion(output, y).item()
-            test_mae += criterion(output, y).item()
-            test_mse += mse_loss(output, y).item()
+            
+            # Calcular métricas SEPARADAMENTE
+            test_loss += criterion_mae(output, y).item()  # ou a loss que você usou no treino
+            test_mae += criterion_mae(output, y).item()
+            test_mse += criterion_mse(output, y).item()
     
     test_loss /= len(test_loader)
     test_mae /= len(test_loader)
