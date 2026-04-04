@@ -8,3 +8,9 @@ Considerações para utilização dos códigos:
 - Executar a instalação das bibliotecas do arquivo "requirements.txt"
 
 OBS.: Os arquivos para execução dos cálculos de minização utilizam os deltas para cálculo dos valores dos coeficientes dinâmicos. Neste trabalho, foram mantidos tais cálculos, porém não serão utilizados. Caso desejar, comentar/excluir os cálculos destes coeficientes dinâmicos no arquivo .MOD e .RUN da pasta AMPL para uma maior velocidade de execução do algoritmo.
+
+
+- Alterações
+Usinas que não possuem todos os dados na tabela IEMA são descartadas.
+Usinas que dão erro na minimização são movidas para a pasta 'Usinas Problemáticas'
+Rede Neural - Camada GRU dividida em duas - Uma analisa janelas constantes e outra janelas curtas para minimizar erro de transições de categoria.

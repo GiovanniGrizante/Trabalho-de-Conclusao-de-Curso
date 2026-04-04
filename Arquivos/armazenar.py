@@ -53,7 +53,7 @@ def main(dados_iema, dados_ons):
     horas = dados_iema['horas']
     for usina in dados_ons.keys():
         tab_ons = dados_ons[usina]
-        tab_iema = pd.DataFrame({'Ano': dados_iema['anos'], 'Emissões': dados_iema['emissoes'[usina]]})
+        tab_iema = pd.DataFrame({'Ano': dados_iema['anos'], 'Emissões': dados_iema['emissoes'][usina]})
 
         if tipo_arquivo == '1':
             criar_parquet(usina, tab_ons, tab_iema)

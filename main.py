@@ -3,16 +3,17 @@ import os, time
 
 from Arquivos import iema, ons, armazenar, ampl, sinteticas
 from Arquivos import tratamento_rede, rede_neural
-from Arquivos import graficos, graficos_aux
+from Arquivos import graficos
 
 
 def gerar_tabela():
     conteudo = [
         ['Etapa 1', 'iema.py\nons.py\narmazenar.py', 'Processa os dados ONS e IEMA.'],
-        ['Etapa 2', 'ampl.py', 'Encontra os coeficientes.'],
+        ['Etapa 2', 'ampl.py', 'Encontra os coeficientes\n(Executar o arquivo p/ multiprocessamento).'],
         ['Etapa 3', 'sinteticas.py\ntratamento_rede.py', 'Gera as emissões sintéticas e trata os dados.'],
-        ['Etapa 4', 'rede_neural.py', 'Executa o modelo de rede neural (GRU + Dense).'],
-        ['Etapa 5', 'graficos.py\ngraficos_aux.py', 'Gera os gráficos das usinas.']
+        ['Etapa 4', 'rede_neural.py', 'Treina o modelo de rede neural (GRU + Dense).'],
+        ['Etapa 5', 'graficos.py\ngraficos_aux.py', 'Gera os resultados gerais e por usina da RN.'],
+        ['Etapa 6', 'previsao.py', 'Executa o modelo para previsão de emissões']
     ]
     
     cabecalho = ['Etapas', 'Arquivos', 'Descrição']
@@ -43,7 +44,8 @@ def perguntar_etapas(etapas):
     while True:
         os.system('cls')
         gerar_tabela()
-        num = int(input(f'Digite a etapa a ser executada (Em branco para todas): '))
+        num = input(f'Digite a etapa a ser executada (Em branco para todas): ')
+        num = int(num) if num.isnumeric() else num
         
         if num in etapas.keys():
             for func in etapas[num]:
@@ -52,11 +54,10 @@ def perguntar_etapas(etapas):
             for num in etapas.keys():
                 for func in etapas[num]:
                     func()
-                
-        print('Etapa inválida.')
-        time.sleep(4)
+        else:
+            print('Etapa inválida.')
+            time.sleep(4)
     
-
 if __name__ == '__main__':
     etapas = executar_etapas()
     perguntar_etapas(etapas)

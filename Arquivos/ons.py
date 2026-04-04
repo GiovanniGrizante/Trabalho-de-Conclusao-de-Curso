@@ -350,5 +350,4 @@ def main(dados_iema):
 
             # Reorganizar as colunas
             ons[usina] = ons[usina][['Ano', 'Índice', 'Geração','Categoria de geração', 'Delta menos', 'Delta mais']]
-            
-            return {'ons': ons}
+    return ons

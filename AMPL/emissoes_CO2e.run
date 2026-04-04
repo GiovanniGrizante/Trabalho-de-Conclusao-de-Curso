@@ -10,8 +10,8 @@
 
 for {a in ANO, h in HORARIO[a]} {
     let pg[a,h] := pg[a,h] / S_base;
-    let delta_pg_ant[a,h] := delta_pg_ant[a,h] / S_base;
-    let delta_pg_pos[a,h] := delta_pg_pos[a,h] / S_base;
+    # let delta_pg_ant[a,h] := delta_pg_ant[a,h] / S_base;
+    # let delta_pg_pos[a,h] := delta_pg_pos[a,h] / S_base;
 };
 #--------------
 
@@ -21,7 +21,7 @@ let Alpha_est := 0;
 let Beta_est := 0;
 let Gamma_est := 0;
 let Omega_est := 0;
-let Mu_est := 0;
+let Mu_est := -0.1;
 
 # Resolução do problema:
 
@@ -34,19 +34,19 @@ solve Regressao_Estatica;
 
 #--------------
 
-let Alpha_din_ant := 0;
-let Beta_din_ant := 0;
-let Gamma_din_ant := 0;
-let Omega_din_ant := 0;
-let Mu_din_ant := 0;
+# let Alpha_din_ant := 0;
+# let Beta_din_ant := 0;
+# let Gamma_din_ant := 0;
+# let Omega_din_ant := 0;
+# let Mu_din_ant := 0;
 
-let Alpha_din_pos := 0;
-let Beta_din_pos := 0;
-let Gamma_din_pos := 0;
-let Omega_din_pos := 0;
-let Mu_din_pos := 0;
+# let Alpha_din_pos := 0;
+# let Beta_din_pos := 0;
+# let Gamma_din_pos := 0;
+# let Omega_din_pos := 0;
+# let Mu_din_pos := 0;
 
-solve Regressao_Dinamica;
+# solve Regressao_Dinamica;
 
 # display MSE_din;
 # display Alpha_est, Beta_est, Gamma_est, Omega_est, Mu_est, 

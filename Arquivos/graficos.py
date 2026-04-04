@@ -208,7 +208,7 @@ def plotar_instabilidade_geral(resultados_df):
     Analise geral de instabilidade para todas as usinas
     """
     df_analise = resultados_df.copy()
-    df_analise['razao'] = df_analise['mse'] / (df_analise['mae'] ** 2)
+    df_analise['razao'] = round(df_analise['mse'] / (df_analise['mae'] ** 2),3)
     df_analise['instabilidade'] = 'Estável'
     df_analise.loc[df_analise['razao'] > 3, 'instabilidade'] = 'Moderada'
     df_analise.loc[df_analise['razao'] > 5, 'instabilidade'] = 'Alta'
@@ -231,7 +231,7 @@ def plotar_instabilidade_geral(resultados_df):
     categorias = ['Estável', 'Moderada', 'Alta', 'Extrema']
     dados_box = []
     for cat in categorias:
-        valores = df_analise[df_analise['instabilidade'] == cat]['razao'].values
+        valores = df_analise[df_analise['instabilidade'] == cat]['razao'].round(3).values
         if len(valores) > 0:
             dados_box.append(valores)
         else:
@@ -363,6 +363,135 @@ RECOMENDAÇÃO:
     plt.savefig(os.path.join(pasta_usina, 'Instabilidade.png'), dpi=150, bbox_inches='tight')
     plt.close()
 
+def plotar_erro_temporal(usina):
+    """
+    Analisa erro temporal de uma usina específica
+    Salva gráficos na pasta da usina: Dados Tratados/[usina]/Graficos/
+    """
+    # Caminhos
+    caminho_predicoes = os.path.join('Dados Tratados', usina, 'Rede Neural', 'Historicos', 'Predições.parquet')
+    caminho_dados = os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Teste.parquet')
+    
+    if not os.path.exists(caminho_predicoes):
+        return None
+    
+    # Carregar predições
+    df_pred = pd.read_parquet(caminho_predicoes)
+    
+    # Carregar dados originais para obter informações adicionais (categoria, geração, etc.)
+    df_dados = pd.read_parquet(caminho_dados) if os.path.exists(caminho_dados) else None
+    
+    y_true = df_pred['y_true'].values
+    y_pred = df_pred['y_pred'].values
+    
+    # Calcular erros
+    erro = y_pred - y_true
+    erro_abs = np.abs(erro)
+    erro_quad = erro ** 2
+    
+    # Métricas globais
+    mae_global = np.mean(erro_abs)
+    mse_global = np.mean(erro_quad)
+    razao_global = mse_global / (mae_global ** 2) if mae_global > 0 else 0
+    
+    # Calcular MSE/MAE² por janela deslizante (168 horas = 7 dias)
+    window = 168
+    razao_local = []
+    for i in range(len(erro) - window):
+        mae_local = np.mean(np.abs(erro[i:i+window]))
+        mse_local = np.mean(erro[i:i+window]**2)
+        if mae_local > 0:
+            razao_local.append(mse_local / (mae_local**2))
+        else:
+            razao_local.append(0)
+    
+    # Calcular estatísticas dos maiores erros
+    top_10_indices = np.argsort(erro_abs)[-10:]  # 10 maiores erros
+    top_10_erros = erro_abs[top_10_indices]
+    
+    # Criar figura com múltiplos subplots
+    fig, axes = plt.subplots(3, 2, figsize=(16, 12))
+    
+    # 1. Série temporal: Real vs Previsto (primeiras 500 horas)
+    n_mostrar = min(500, len(y_true))
+    axes[0, 0].plot(y_true[:n_mostrar], label='Real', alpha=0.7, linewidth=1, color='blue')
+    axes[0, 0].plot(y_pred[:n_mostrar], label='Previsto', alpha=0.7, linewidth=1, color='red', linestyle='--')
+    axes[0, 0].set_ylabel('Emissões (tCO2/h)')
+    axes[0, 0].set_title(f'Real vs Previsto (primeiras {n_mostrar} horas)')
+    axes[0, 0].legend()
+    axes[0, 0].grid(True, alpha=0.3)
+    
+    # 2. Erro ao longo do tempo
+    axes[0, 1].plot(erro[:n_mostrar], color='purple', alpha=0.7, linewidth=0.8)
+    axes[0, 1].axhline(y=0, color='black', linestyle='--', linewidth=0.5)
+    axes[0, 1].fill_between(range(n_mostrar), 0, erro[:n_mostrar], 
+                            where=(erro[:n_mostrar] > 0), color='red', alpha=0.3, label='Erro positivo')
+    axes[0, 1].fill_between(range(n_mostrar), erro[:n_mostrar], 0, 
+                            where=(erro[:n_mostrar] < 0), color='blue', alpha=0.3, label='Erro negativo')
+    axes[0, 1].set_ylabel('Erro (tCO2/h)')
+    axes[0, 1].set_title('Erro ao longo do tempo')
+    axes[0, 1].legend()
+    axes[0, 1].grid(True, alpha=0.3)
+    
+    # 3. Erro Absoluto com limiares
+    limiar_95 = np.percentile(erro_abs, 95)
+    limiar_99 = np.percentile(erro_abs, 99)
+    
+    axes[1, 0].plot(erro_abs[:n_mostrar], color='orange', alpha=0.7, linewidth=0.8)
+    axes[1, 0].axhline(y=limiar_95, color='red', linestyle='--', 
+                       label=f'95º percentil: {limiar_95:.2f}')
+    axes[1, 0].axhline(y=limiar_99, color='darkred', linestyle='--', 
+                       label=f'99º percentil: {limiar_99:.2f}')
+    axes[1, 0].set_ylabel('Erro Absoluto (tCO2/h)')
+    axes[1, 0].set_title('Erro Absoluto e Outliers')
+    axes[1, 0].legend()
+    axes[1, 0].grid(True, alpha=0.3)
+    
+    # 4. MSE/MAE² por janela deslizante (INSTABILIDADE LOCAL)
+    axes[1, 1].plot(razao_local, color='darkgreen', alpha=0.7, linewidth=0.8)
+    axes[1, 1].axhline(y=3, color='green', linestyle='--', linewidth=1, label='Estável (<3)')
+    axes[1, 1].axhline(y=5, color='orange', linestyle='--', linewidth=1, label='Alerta (5)')
+    axes[1, 1].axhline(y=10, color='red', linestyle='--', linewidth=1, label='Extremo (>10)')
+    axes[1, 1].set_ylabel('MSE/MAE²')
+    axes[1, 1].set_xlabel('Tempo (horas)')
+    axes[1, 1].set_title(f'Instabilidade Local (janela {window}h)')
+    axes[1, 1].legend()
+    axes[1, 1].grid(True, alpha=0.3)
+    
+    # 5. Dispersão: Erro vs Valor Real
+    axes[2, 0].scatter(y_true, erro_abs, alpha=0.3, s=10, c='steelblue')
+    axes[2, 0].axhline(y=limiar_95, color='red', linestyle='--', label=f'95º percentil')
+    axes[2, 0].set_xlabel('Valor Real (tCO2/h)')
+    axes[2, 0].set_ylabel('Erro Absoluto')
+    axes[2, 0].set_title('Erro vs Valor Real')
+    axes[2, 0].legend()
+    axes[2, 0].grid(True, alpha=0.3)
+    
+    # 6. Histograma dos erros
+    axes[2, 1].hist(erro, bins=50, edgecolor='black', alpha=0.7, color='steelblue')
+    axes[2, 1].axvline(x=0, color='black', linestyle='--', linewidth=1)
+    axes[2, 1].axvline(x=np.mean(erro), color='red', linestyle='--', 
+                       label=f'Média: {np.mean(erro):.2f}')
+    axes[2, 1].set_xlabel('Erro (tCO2/h)')
+    axes[2, 1].set_ylabel('Frequência')
+    axes[2, 1].set_title('Distribuição dos Erros')
+    axes[2, 1].legend()
+    axes[2, 1].grid(True, alpha=0.3)
+    
+    # Título principal com métricas
+    classificacao = "Extrema" if razao_global > 10 else ("Alta" if razao_global > 5 else ("Moderada" if razao_global > 3 else "Estável"))
+    
+    plt.suptitle(f'{usina} | MAE: {mae_global:.2f} | MSE/MAE²: {razao_global:.2f} | Classificação: {classificacao}', 
+                 fontsize=14, fontweight='bold')
+    
+    plt.tight_layout()
+    
+    # Salvar gráfico na pasta da usina
+    pasta_usina = os.path.join('Dados Tratados', usina, 'Gráficos')
+    os.makedirs(pasta_usina, exist_ok=True)
+    plt.savefig(os.path.join(pasta_usina, 'Erro Temporal.png'), dpi=150, bbox_inches='tight')
+    plt.close()
+    
 def main():
     resultados = []
     

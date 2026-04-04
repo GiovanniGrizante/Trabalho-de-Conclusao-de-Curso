@@ -25,6 +25,10 @@ def ampl_model(usina):
     # Carregar o arquivo .run (execução)
     ampl.eval(f'include "{os.path.join("AMPL", "emissoes_CO2e.run")}";')
 
+    solve_message = ampl.get_value('solve_message')
+    if 'Invalid number in NLP function' in str(solve_message):
+        return None
+    
     # Obter os valores das variáveis de decisão
     alpha = round(ampl.var['Alpha_est'].value(), 3)
     beta = round(ampl.var['Beta_est'].value(), 3)
@@ -32,33 +36,18 @@ def ampl_model(usina):
     omega = round(ampl.var['Omega_est'].value(), 3)
     mu = round(ampl.var['Mu_est'].value(), 3)
 
-    alpha_ant = round(ampl.var['Alpha_din_ant'].value(), 3)
-    beta_ant = round(ampl.var['Beta_din_ant'].value(), 3)
-    gamma_ant = round(ampl.var['Gamma_din_ant'].value(), 3)
-    omega_ant = round(ampl.var['Omega_din_ant'].value(), 3)
-    mu_ant = round(ampl.var['Mu_din_ant'].value(), 3)
-
-    alpha_pos = round(ampl.var['Alpha_din_pos'].value(), 3)
-    beta_pos = round(ampl.var['Beta_din_pos'].value(), 3)
-    gamma_pos = round(ampl.var['Gamma_din_pos'].value(), 3)
-    omega_pos = round(ampl.var['Omega_din_pos'].value(), 3)
-    mu_pos = round(ampl.var['Mu_din_pos'].value(), 3)
-
     MSE_est = round(ampl.getObjective('MSE_est').value(), 3)
-    MSE_din = round(ampl.getObjective('MSE_din').value(), 3)
 
     # Salvando os resultados em um DataFrame e exportando para CSV
     tab = pd.DataFrame({'Coeficientes':['Alpha','Beta','Gamma','Omega','Mu', 'MSE'],
-                        'Valores Estáticos':[alpha,beta,gamma,omega,mu, MSE_est],
-                        'Valores Dinâmicos Anteriores':[alpha_ant,beta_ant,gamma_ant,omega_ant,mu_ant, MSE_din],
-                        'Valores Dinâmicos Posteriores':[alpha_pos,beta_pos,gamma_pos,omega_pos,mu_pos, MSE_din]})
+                        'Valores Estáticos':[alpha,beta,gamma,omega,mu, MSE_est]})
     
     os.makedirs(f'Dados Tratados\\{usina}\\Emissões Sintéticas', exist_ok=True)
     tab.to_parquet(f'Dados Tratados\\{usina}\\Emissões Sintéticas\\Coeficientes.parquet',index=False)
 
-def main():
+def main(multiprocessamento=False):
     # Para que o multiprocessamento seja ativado, é necessário que o código seja executado dentro do arquivo principal (main)
-    if __name__ == '__main__':
+    if multiprocessamento:
         
         # Determinar número de threads a serem utilizadas
         num_nucleos = int(input(f'Número de threads a serem utilizadas (máximo {multiprocessing.cpu_count() - 1}): '))
@@ -105,3 +94,6 @@ def main():
         print('Para ativar o multiprocessamento, execute o arquivo ampl.py')
         for usina in os.listdir('Dados Tratados'):
             ampl_model(usina)
+            
+if __name__ == '__main__':
+    main(multiprocessamento=True)
