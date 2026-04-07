@@ -212,7 +212,7 @@ def categorizar_geracao(usina, geracao, limiar=15):
                 categorias_finais[i] = 0
     
     
-    dir = os.path.join('Dados Tratados', usina, 'Informações de Geração')
+    dir = os.path.join('Usinas', usina, 'Infos de Geração')
     if not os.path.exists(dir):
         os.makedirs(dir)
         

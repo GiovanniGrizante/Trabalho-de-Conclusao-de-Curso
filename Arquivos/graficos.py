@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-import os
+import os, time
 
 def plotar_geracao_emissao(usina):
     """
@@ -10,8 +10,8 @@ def plotar_geracao_emissao(usina):
     Eixo X: Tempo (Indice com marcacao de Ano)
     """
     # Caminhos dos arquivos
-    caminho_geracao = os.path.join('Dados Tratados', usina, 'Dados Externos', 'ONS.parquet')
-    caminho_emissao = os.path.join('Dados Tratados', usina, 'Emissões Sintéticas', 'Horárias.parquet')
+    caminho_geracao = os.path.join('Usinas', usina, 'Dados Externos', 'ONS.parquet')
+    caminho_emissao = os.path.join('Usinas', usina, 'Emissões Sintéticas', 'Horárias.parquet')
     
     if not os.path.exists(caminho_geracao) or not os.path.exists(caminho_emissao):
         return
@@ -42,7 +42,7 @@ def plotar_geracao_emissao(usina):
     anos_unicos = sorted(df_merged[col_ano].unique())
     
     # Criar pasta para salvar graficos
-    pasta_usina = os.path.join('Dados Tratados', usina, 'Gráficos', 'Geração X Emissão')
+    pasta_usina = os.path.join('Usinas', usina, 'Minimização', 'Gráficos', 'Geração X Emissão')
     os.makedirs(pasta_usina, exist_ok=True)
     
     # Gerar um grafico para cada ano
@@ -89,197 +89,428 @@ def plotar_geracao_emissao(usina):
         plt.savefig(os.path.join(pasta_usina, nome_arquivo), dpi=150, bbox_inches='tight')
         plt.close()
 
-def plotar_gerais(resultados_df):
-    """
-    Plota resultados em tCO2/h (escala real) com grafico de dispersao
-    """
-    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+def plotar_gerais(resultados_df, graphs, ext):
     
-    # 1. Histograma do MAE (escala log)
-    axes[0, 0].hist(np.log10(resultados_df['mae'] + 1e-10), bins=30, edgecolor='black', alpha=0.7, color='steelblue')
-    axes[0, 0].axvline(np.log10(resultados_df['mae'].mean()), color='red', 
-                       linestyle='--', linewidth=2,
-                       label=f'Media: {resultados_df["mae"].mean():.2f}')
-    axes[0, 0].axvline(np.log10(resultados_df['mae'].median()), color='green', 
-                       linestyle='--', linewidth=2,
-                       label=f'Mediana: {resultados_df["mae"].median():.2f}')
-    axes[0, 0].set_xlabel('log10(MAE) [tCO2/h]')
-    axes[0, 0].set_ylabel('Numero de Usinas')
-    axes[0, 0].set_title('Distribuicao do MAE (escala log)')
-    axes[0, 0].legend()
-    axes[0, 0].grid(True, alpha=0.3)
+    # ========== GRÁFICOS ==========
     
-    # 2. Grafico de dispersao
-    df_sorted = resultados_df.sort_values('mae', ascending=False).reset_index(drop=True)
-    x_pos = np.arange(len(df_sorted))
-    colors = np.log10(df_sorted['mae'].values + 1e-10)
-    scatter = axes[0, 1].scatter(x_pos, df_sorted['mae'].values, 
-                                 c=colors, cmap='viridis', alpha=0.7, s=50)
-    axes[0, 1].axhline(y=resultados_df['mae'].median(), color='red', 
-                       linestyle='--', linewidth=2, 
-                       label=f'Mediana: {resultados_df["mae"].median():.2f}')
-    axes[0, 1].axhline(y=resultados_df['mae'].mean(), color='blue', 
-                       linestyle='--', linewidth=2, 
-                       label=f'Media: {resultados_df["mae"].mean():.2f}')
-    axes[0, 1].set_xlabel('Usinas (ordenadas por MAE decrescente)')
-    axes[0, 1].set_ylabel('MAE (tCO2/h)')
-    axes[0, 1].set_title('Dispersao do MAE por Usina')
-    axes[0, 1].set_yscale('log')
-    axes[0, 1].legend(loc='upper right')
-    axes[0, 1].grid(True, alpha=0.3, axis='y')
-    plt.colorbar(scatter, ax=axes[0, 1], label='log10(MAE)')
-    
-    # 3. MAE vs MSE
-    axes[0, 2].scatter(resultados_df['mae'], resultados_df['mse'], 
-                       alpha=0.6, c='steelblue', s=40)
-    axes[0, 2].set_xlabel('MAE')
-    axes[0, 2].set_ylabel('MSE')
-    axes[0, 2].set_title('MAE vs MSE')
-    axes[0, 2].set_xscale('log')
-    axes[0, 2].set_yscale('log')
-    axes[0, 2].grid(True, alpha=0.3)
-    
-    # 4. Top 10 melhores usinas
-    top10_melhores = resultados_df.nsmallest(10, 'mae')
-    cores_melhores = plt.cm.YlOrRd(1 - top10_melhores['mae'] / top10_melhores['mae'].max())
-    axes[1, 0].barh(range(len(top10_melhores)), top10_melhores['mae'].values, 
-                    color=cores_melhores, edgecolor='black')
-    axes[1, 0].set_yticks(range(len(top10_melhores)))
-    axes[1, 0].set_yticklabels(top10_melhores['usina'].values, fontsize=8)
-    axes[1, 0].set_xlabel('MAE (tCO2/h)')
-    axes[1, 0].set_title('Top 10 Melhores Usinas (menor MAE)')
-    axes[1, 0].invert_yaxis()
-    axes[1, 0].grid(True, alpha=0.3, axis='x')
-    
-    # 5. Top 10 piores usinas
-    top10_piores = resultados_df.nlargest(10, 'mae')
-    cores_piores = plt.cm.Reds(top10_piores['mae'] / top10_piores['mae'].max())
-    axes[1, 1].barh(range(len(top10_piores)), top10_piores['mae'].values, 
-                    color=cores_piores, edgecolor='black')
-    axes[1, 1].set_yticks(range(len(top10_piores)))
-    axes[1, 1].set_yticklabels(top10_piores['usina'].values, fontsize=8)
-    axes[1, 1].set_xlabel('MAE (tCO2/h)')
-    axes[1, 1].set_title('Top 10 Piores Usinas (maior MAE)')
-    axes[1, 1].invert_yaxis()
-    axes[1, 1].grid(True, alpha=0.3, axis='x')
-    
-    # 6. Resumo estatistico
-    axes[1, 2].axis('off')
-    q1 = resultados_df['mae'].quantile(0.25)
-    q3 = resultados_df['mae'].quantile(0.75)
-    iqr = q3 - q1
-    
-    texto = f"""RESUMO ESTATÍSTICO (tCO2/h)
+    def histograma(resultados_df, graphs, ext, path):
+        # Histograma do MAE (escala log)
+        if graphs == plt:
+            graphs.figure(figsize=(10, 6))
+        
+        graphs.hist(np.log10(resultados_df['mae'] + 1e-10), bins=30, edgecolor='black', alpha=0.7, color='steelblue')
+        graphs.axvline(np.log10(resultados_df['mae'].mean()), color='red', 
+                linestyle='--', linewidth=2,
+                label=f'Média: {resultados_df["mae"].mean():.2f}')
+        graphs.axvline(np.log10(resultados_df['mae'].median()), color='green', 
+                linestyle='--', linewidth=2,
+                label=f'Mediana: {resultados_df["mae"].median():.2f}')
+        graphs.xlabel('log10(MAE) [tCO2/h]')
+        graphs.ylabel('Número de Usinas')
+        graphs.title('Distribuição do MAE (escala log)')
+        graphs.legend()
+        graphs.grid(True, alpha=0.3)
+        
+        if graphs == plt:
+            os.makedirs(os.path.join(path, f'{ext[1:].upper()}'),exist_ok=True)
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Histograma MAE{ext}'), dpi=300, bbox_inches='tight')
+            plt.close()
+        
+    def dispersao(resultados_df, graphs, ext, path):
+        # 2. Gráfico de dispersão
+        df_sorted = resultados_df.sort_values('mae', ascending=False).reset_index(drop=True)
+        x_pos = np.arange(len(df_sorted))
+        colors = np.log10(df_sorted['mae'].values + 1e-10)
 
-Total de Usinas: {len(resultados_df)}
+        if graphs == plt:
+            graphs.figure(figsize=(12, 6))
 
-MAE:
-  Média: {resultados_df['mae'].mean():.2f}
-  Mediana: {resultados_df['mae'].median():.2f}
-  Desvio Padrão: {resultados_df['mae'].std():.2f}
-  
-  Mínimo: {resultados_df['mae'].min():.6f}
-  Máximo: {resultados_df['mae'].max():.2f}
-  
-  1º Quartil: {q1:.2f}
-  3º Quartil: {q3:.2f}
-  IQR: {iqr:.2f}
+        scatter = graphs.scatter(x_pos, df_sorted['mae'].values, 
+                            c=colors, cmap='viridis', alpha=0.7, s=50)
 
-DESEMPENHO:
-  MAE < 10: {(resultados_df['mae'] < 10).sum()} usinas
-  MAE < 100: {(resultados_df['mae'] < 100).sum()} usinas
+        graphs.axhline(y=resultados_df['mae'].median(), color='red', 
+                    linestyle='--', linewidth=2, 
+                    label=f'Mediana: {resultados_df["mae"].median():.2f}')
+        graphs.axhline(y=resultados_df['mae'].mean(), color='blue', 
+                    linestyle='--', linewidth=2, 
+                    label=f'Média: {resultados_df["mae"].mean():.2f}')
 
-PROBLEMÁTICAS:
-  MAE > 1000: {(resultados_df['mae'] > 1000).sum()} usinas
-  MAE > 10000: {(resultados_df['mae'] > 10000).sum()} usinas
-"""
-    axes[1, 2].text(0.05, 0.95, texto, transform=axes[1, 2].transAxes, fontsize=10,
-                    verticalalignment='top', fontfamily='monospace',
-                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        graphs.xlabel('Usinas (ordenadas por MAE decrescente)')
+        graphs.ylabel('MAE (tCO2/h)')
+        graphs.title('Dispersão do MAE por Usina')
+        graphs.yscale('log')
+        graphs.legend(loc='upper right')
+        graphs.grid(True, alpha=0.3, axis='y')
+        graphs.colorbar(scatter, label='log10(MAE)')
+        graphs.tight_layout()
+        
+        if graphs == plt:
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Dispersão{ext}'), dpi=300, bbox_inches='tight')
+            plt.close()
     
-    plt.suptitle('Resultados do Modelo - Análise de Emissões (tCO2/h)', fontsize=14)
-    plt.tight_layout()
-    os.makedirs(os.path.join('Resultados', 'Gráficos'), exist_ok=True)
-    plt.savefig(os.path.join('Resultados', 'Gráficos', 'Gerais.png'), dpi=150, bbox_inches='tight')
-    plt.close()
+    def mae_mse(resultados_df, graphs, ext, path):
+        # MAE xs MSE
+        if graphs == plt:
+            graphs.figure(figsize=(10, 6))
+        
+        graphs.scatter(resultados_df['mae'], resultados_df['mse'], 
+                alpha=0.6, c='steelblue', s=40)
+        graphs.xlabel('MAE')
+        graphs.ylabel('MSE')
+        graphs.title('MAE x MSE')
+        graphs.xscale('log')
+        graphs.yscale('log')
+        graphs.grid(True, alpha=0.3)
+        graphs.tight_layout()
+        
+        if graphs == plt:
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'MAE x MSE{ext}'), dpi=300, bbox_inches='tight')
+            plt.close()
+    
+    def melhores(resultados_df, graphs, ext, path):
+        # Top 10 melhores usinas
+        top10_melhores = resultados_df.nsmallest(10, 'mae')
+        cores_melhores = plt.cm.YlOrRd(1 - top10_melhores['mae'] / top10_melhores['mae'].max())
 
-def plotar_instabilidade_geral(resultados_df):
-    """
-    Analise geral de instabilidade para todas as usinas
-    """
+        if graphs == plt:
+            graphs.figure(figsize=(10, 6))
+        
+        graphs.barh(range(len(top10_melhores)), top10_melhores['mae'].values, 
+                color=cores_melhores, edgecolor='black')
+        
+        # Tratamento diferente para plt e axes
+        if graphs == plt:
+            graphs.yticks(range(len(top10_melhores)), top10_melhores['usina'].values, fontsize=8)
+            graphs.gca().invert_yaxis()
+        else:
+            graphs.set_yticks(range(len(top10_melhores)))
+            graphs.set_yticklabels(top10_melhores['usina'].values, fontsize=8)
+            graphs.invert_yaxis()
+        
+        graphs.xlabel('MAE (tCO2/h)')
+        graphs.title('Top 10 Melhores Usinas (menor MAE)')
+        graphs.grid(True, alpha=0.3, axis='x')
+        graphs.tight_layout()
+        
+        if graphs == plt:
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'10 Melhores Desempenhos{ext}'), dpi=300, bbox_inches='tight')
+            plt.close()
+    
+    def piores(resultados_df, graphs, ext, path):
+        top10_piores = resultados_df.nlargest(10, 'mae')
+        cores_piores = plt.cm.Reds(top10_piores['mae'] / top10_piores['mae'].max())
+        
+        if graphs == plt:
+            graphs.figure(figsize=(10, 6))
+        
+        graphs.barh(range(len(top10_piores)), top10_piores['mae'].values, 
+                        color=cores_piores, edgecolor='black')
+        
+        # Tratamento diferente para plt e axes
+        if graphs == plt:
+            graphs.yticks(range(len(top10_piores)), top10_piores['usina'].values, fontsize=8)
+            graphs.gca().invert_yaxis()
+            graphs.xlabel('MAE (tCO2/h)')
+            graphs.title('Top 10 Piores Usinas (maior MAE)')
+        else:
+            graphs.set_yticks(range(len(top10_piores)))
+            graphs.set_yticklabels(top10_piores['usina'].values, fontsize=8)
+            graphs.invert_yaxis()
+            graphs.set_xlabel('MAE (tCO2/h)')
+            graphs.set_title('Top 10 Piores Usinas (maior MAE)')
+        
+        graphs.grid(True, alpha=0.3, axis='x')
+        graphs.tight_layout()
+        
+        if graphs == plt:
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'10 Piores Desempenhos{ext}'), dpi=300, bbox_inches='tight')
+            plt.close()
+    
+    def resumo(resultados_df, graphs, ext, path):
+        # Calcula as estatísticas
+        q1 = resultados_df['mae'].quantile(0.25)
+        q3 = resultados_df['mae'].quantile(0.75)
+        iqr = q3 - q1
+        
+        # Organiza os dados em categorias
+        dados_tabela = [
+            ['TOTAL DE USINAS', f'{len(resultados_df)}', ''],
+            ['', '', ''],
+            ['MAE (tCO2/h)', '', ''],
+            ['  Média', f'{resultados_df["mae"].mean():.2f}', ''],
+            ['  Mediana', f'{resultados_df["mae"].median():.2f}', ''],
+            ['  Desvio Padrão', f'{resultados_df["mae"].std():.2f}', ''],
+            ['  Mínimo', f'{resultados_df["mae"].min():.6f}', ''],
+            ['  Máximo', f'{resultados_df["mae"].max():.2f}', ''],
+            ['  1º Quartil', f'{q1:.2f}', ''],
+            ['  3º Quartil', f'{q3:.2f}', ''],
+            ['  IQR', f'{iqr:.2f}', ''],
+            ['', '', ''],
+            ['DESEMPENHO', '', ''],
+            ['  MAE < 10', f'{(resultados_df["mae"] < 10).sum()}', f'{(resultados_df["mae"] < 10).sum() / len(resultados_df) * 100:.1f}%'],
+            ['  MAE < 100', f'{(resultados_df["mae"] < 100).sum()}', f'{(resultados_df["mae"] < 100).sum() / len(resultados_df) * 100:.1f}%'],
+            ['', '', ''],
+            ['PROBLEMÁTICAS', '', ''],
+            ['  MAE > 1000', f'{(resultados_df["mae"] > 1000).sum()}', f'{(resultados_df["mae"] > 1000).sum() / len(resultados_df) * 100:.1f}%'],
+            ['  MAE > 10000', f'{(resultados_df["mae"] > 10000).sum()}', f'{(resultados_df["mae"] > 10000).sum() / len(resultados_df) * 100:.1f}%']
+        ]
+        
+        # Verifica se é gráfico individual (plt) ou subplot (axes)
+        if graphs == plt:
+            # Para gráficos individuais, cria uma figura separada
+            fig, ax = plt.subplots(figsize=(10, 8))
+            ax.axis('off')
+            
+            # Cria a tabela
+            table = ax.table(cellText=dados_tabela,
+                            colLabels=['Métrica', 'Valor', '% do Total'],
+                            cellLoc='left',
+                            loc='center',
+                            colWidths=[0.5, 0.2, 0.2])
+            
+            table.auto_set_font_size(False)
+            table.set_fontsize(10)
+            table.scale(1.2, 1.5)
+            
+            # Estiliza as células
+            for (i, j), cell in table.get_celld().items():
+                if i == 0:  # Cabeçalho
+                    cell.set_facecolor('#2E4053')
+                    cell.set_text_props(weight='bold', color='white')
+                elif i in [1, 12, 16]:  # Linhas de separação
+                    cell.set_facecolor('#F0F0F0')
+                elif dados_tabela[i-1][0] == 'TOTAL DE USINAS':
+                    cell.set_facecolor('#D5E8D4')
+                    cell.set_text_props(weight='bold')
+                elif dados_tabela[i-1][0] == 'MAE (tCO2/h)':
+                    cell.set_facecolor('#DAE3F3')
+                    cell.set_text_props(weight='bold')
+                elif dados_tabela[i-1][0] == 'DESEMPENHO':
+                    cell.set_facecolor('#D5E8D4')
+                    cell.set_text_props(weight='bold')
+                elif dados_tabela[i-1][0] == 'PROBLEMÁTICAS':
+                    cell.set_facecolor('#F8CECC')
+                    cell.set_text_props(weight='bold')
+            
+            # ax.set_title('Resumo Estatístico - Análise de Emissões (tCO2/h)', 
+            #             fontsize=14, weight='bold', pad=20)
+            
+            plt.tight_layout()
+            plt.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Resumo Estatístico{ext}'), 
+                    dpi=300, bbox_inches='tight')
+            plt.close()
+            
+        else:
+            # Para subplots, usa o axes existente (sem criar nova figura)
+            graphs.axis('off')  # Desliga os eixos
+            
+            # Cria a tabela no axes existente
+            table = graphs.table(cellText=dados_tabela,
+                                colLabels=['Métrica', 'Valor', '% do Total'],
+                                cellLoc='left',
+                                loc='center',
+                                colWidths=[0.5, 0.2, 0.2])
+            
+            table.auto_set_font_size(False)
+            table.set_fontsize(8)  # Fonte um pouco menor para subplot
+            table.scale(1.1, 1.3)  # Escala ligeiramente menor
+            
+            # Estiliza as células
+            for (i, j), cell in table.get_celld().items():
+                if i == 0:  # Cabeçalho
+                    cell.set_facecolor('#2E4053')
+                    cell.set_text_props(weight='bold', color='white')
+                elif i in [1, 12, 16]:  # Linhas de separação
+                    cell.set_facecolor('#F0F0F0')
+                elif dados_tabela[i-1][0].startswith('📊'):
+                    cell.set_facecolor('#D5E8D4')
+                    cell.set_text_props(weight='bold')
+                elif dados_tabela[i-1][0].startswith('📈'):
+                    cell.set_facecolor('#DAE3F3')
+                    cell.set_text_props(weight='bold')
+                elif dados_tabela[i-1][0].startswith('✅'):
+                    cell.set_facecolor('#D5E8D4')
+                    cell.set_text_props(weight='bold')
+                elif dados_tabela[i-1][0].startswith('⚠️'):
+                    cell.set_facecolor('#F8CECC')
+                    cell.set_text_props(weight='bold')
+            
+            # Título menor para subplot
+            #graphs.set_title('Resumo Estatístico', fontsize=10, weight='bold')
+    
+    # ========== EXECUÇÃO PRINCIPAL ==========
+    
+    if graphs == 1:
+        os.makedirs(os.path.join('Resultados', 'Gráficos', 'Individuais'), exist_ok=True)
+        path = os.path.join('Resultados', 'Gráficos', 'Individuais')
+        
+        # Redefine graphs para ser o plt
+        graphs = plt
+        
+        histograma(resultados_df, graphs, ext, path)
+        dispersao(resultados_df, graphs, ext, path)
+        mae_mse(resultados_df, graphs, ext, path)
+        melhores(resultados_df, graphs, ext, path)
+        piores(resultados_df, graphs, ext, path)
+        resumo(resultados_df, graphs, ext, path)
+        
+    elif graphs == 2:
+        os.makedirs(os.path.join('Resultados', 'Gráficos', 'Unificados'), exist_ok=True)
+        path = os.path.join('Resultados', 'Gráficos', 'Unificados')
+        
+        # Cria a figura com subplots
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        
+        # Chama cada função com o axes correspondente
+        histograma(resultados_df, axes[0, 0], ext, path)
+        dispersao(resultados_df, axes[0, 1], ext, path)
+        mae_mse(resultados_df, axes[0, 2], ext, path)
+        melhores(resultados_df, axes[1, 0], ext, path)
+        piores(resultados_df, axes[1, 1], ext, path)
+        resumo(resultados_df, axes[1, 2], ext, path)
+        
+        # Ajusta e salva a figura completa
+        plt.suptitle('Resultados do Modelo - Análise de Emissões (tCO2/h)', fontsize=16)
+        plt.tight_layout()
+        plt.savefig(os.path.join(path, f'Gerais{ext}'), dpi=300, bbox_inches='tight')
+        plt.close()
+
+def plotar_instabilidade_geral(resultados_df, graphs, ext):
+    
+    def distribuicao(df_analise, graphs, ext, path):
+        if graphs == plt:
+            graphs.figure(figsize=(10, 6))
+            
+        # Distribuicao da razao MSE/MAE2
+        graphs.hist(df_analise['razao'], bins=30, edgecolor='black', alpha=0.7, color='steelblue')
+        graphs.axvline(x=3, color='orange', linestyle='--', linewidth=1.5, label='Limiar moderado (3)')
+        graphs.axvline(x=5, color='red', linestyle='--', linewidth=1.5, label='Limiar alto (5)')
+        graphs.axvline(x=10, color='darkred', linestyle='--', linewidth=1.5, label='Limiar extremo (10)')
+        
+        if graphs == plt:
+            graphs.xlabel('Razão MSE/MAE²')
+            graphs.ylabel('Número de Usinas')
+            graphs.title('Distribuição da Instabilidade')
+            graphs.legend()
+            graphs.grid(True, alpha=0.3)
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Distribuição de Instabilidade{ext}'), dpi=300, bbox_inches='tight')
+            plt.close()
+            
+        else:
+            graphs.set_xlabel('Razão MSE/MAE²')
+            graphs.set_ylabel('Número de Usinas')
+            graphs.set_title('Distribuição da Instabilidade')
+            graphs.legend()
+            graphs.grid(True, alpha=0.3)
+    
+    def categorias(df_analise, graphs, ext, path):
+        if graphs == plt:
+            graphs.figure(figsize=(10, 6))
+            
+        # Boxplot por categoria de instabilidade
+        categorias = ['Estável', 'Moderada', 'Alta', 'Extrema']
+        dados_box = []
+        for cat in categorias:
+            valores = df_analise[df_analise['instabilidade'] == cat]['razao'].round(3).values
+            if len(valores) > 0:
+                dados_box.append(valores)
+            else:
+                dados_box.append([])
+        
+        bp = graphs.boxplot(dados_box, tick_labels=categorias, patch_artist=True)
+        cores_box = ['green', 'orange', 'red', 'darkred']
+        for patch, cor in zip(bp['boxes'], cores_box):
+            if patch is not None:
+                patch.set_facecolor(cor)
+                patch.set_alpha(0.5)
+        
+        if graphs == plt:
+            graphs.ylabel('Razao MSE/MAE²')
+            graphs.title('Instabilidade por Categoria')
+            graphs.grid(True, alpha=0.3, axis='y')
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Instabilidade por Categoria{ext}'), dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        else:
+            graphs.set_ylabel('Razao MSE/MAE²')
+            graphs.set_title('Instabilidade por Categoria')
+            graphs.grid(True, alpha=0.3, axis='y')
+    
+    def dispersao(df_analise, graphs, ext, path):
+        if graphs == plt:
+            graphs.figure(figsize=(10, 6))
+            
+        # Dispersao MAE vs Razao com cores
+        cores_instab = {'Estável': 'green', 'Moderada': 'orange', 'Alta': 'red', 'Extrema': 'darkred'}
+        for cat, cor in cores_instab.items():
+            subset = df_analise[df_analise['instabilidade'] == cat]
+            if len(subset) > 0:
+                graphs.scatter(subset['mae'], subset['razao'], c=cor, label=cat, alpha=0.6, s=40)
+        graphs.axhline(y=3, color='orange', linestyle='--', linewidth=1, alpha=0.7)
+        graphs.axhline(y=5, color='red', linestyle='--', linewidth=1, alpha=0.7)
+        graphs.axhline(y=10, color='darkred', linestyle='--', linewidth=1, alpha=0.7)
+        
+        if graphs == plt:
+            graphs.xlabel('MAE (tCO2/h)')
+            graphs.ylabel('Razao MSE/MAE²')
+            graphs.title('MAE vs Instabilidade')
+            graphs.xscale('log')
+            graphs.yscale('log')
+            graphs.legend()
+            graphs.grid(True, alpha=0.3)
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'MAE x Instabilidade{ext}'), dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        else:
+            graphs.set_xlabel('MAE (tCO2/h)')
+            graphs.set_ylabel('Razao MSE/MAE²')
+            graphs.set_title('MAE vs Instabilidade')
+            graphs.set_xscale('log')
+            graphs.set_yscale('log')
+            graphs.legend()
+            graphs.grid(True, alpha=0.3)
+            
     df_analise = resultados_df.copy()
     df_analise['razao'] = round(df_analise['mse'] / (df_analise['mae'] ** 2),3)
     df_analise['instabilidade'] = 'Estável'
+    
     df_analise.loc[df_analise['razao'] > 3, 'instabilidade'] = 'Moderada'
     df_analise.loc[df_analise['razao'] > 5, 'instabilidade'] = 'Alta'
     df_analise.loc[df_analise['razao'] > 10, 'instabilidade'] = 'Extrema'
     
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    if graphs == 1:
+        path = os.path.join('Resultados', 'Gráficos', 'Individuais')
+        
+        # Redefine graphs para ser o plt
+        graphs = plt
+        
+        distribuicao(df_analise, graphs, ext, path)
+        categorias(df_analise, graphs, ext, path)
+        dispersao(df_analise, graphs, ext, path)
     
-    # 1. Distribuicao da razao MSE/MAE2
-    axes[0].hist(df_analise['razao'], bins=30, edgecolor='black', alpha=0.7, color='steelblue')
-    axes[0].axvline(x=3, color='orange', linestyle='--', linewidth=1.5, label='Limiar moderado (3)')
-    axes[0].axvline(x=5, color='red', linestyle='--', linewidth=1.5, label='Limiar alto (5)')
-    axes[0].axvline(x=10, color='darkred', linestyle='--', linewidth=1.5, label='Limiar extremo (10)')
-    axes[0].set_xlabel('Razão MSE/MAE²')
-    axes[0].set_ylabel('Número de Usinas')
-    axes[0].set_title('Distribuição da Instabilidade')
-    axes[0].legend()
-    axes[0].grid(True, alpha=0.3)
-    
-    # 2. Boxplot por categoria de instabilidade
-    categorias = ['Estável', 'Moderada', 'Alta', 'Extrema']
-    dados_box = []
-    for cat in categorias:
-        valores = df_analise[df_analise['instabilidade'] == cat]['razao'].round(3).values
-        if len(valores) > 0:
-            dados_box.append(valores)
-        else:
-            dados_box.append([])
-    
-    bp = axes[1].boxplot(dados_box, tick_labels=categorias, patch_artist=True)
-    cores_box = ['green', 'orange', 'red', 'darkred']
-    for patch, cor in zip(bp['boxes'], cores_box):
-        if patch is not None:
-            patch.set_facecolor(cor)
-            patch.set_alpha(0.5)
-    axes[1].set_ylabel('Razao MSE/MAE²')
-    axes[1].set_title('Instabilidade por Categoria')
-    axes[1].grid(True, alpha=0.3, axis='y')
-    
-    # 3. Dispersao MAE vs Razao com cores
-    cores_instab = {'Estável': 'green', 'Moderada': 'orange', 'Alta': 'red', 'Extrema': 'darkred'}
-    for cat, cor in cores_instab.items():
-        subset = df_analise[df_analise['instabilidade'] == cat]
-        if len(subset) > 0:
-            axes[2].scatter(subset['mae'], subset['razao'], c=cor, label=cat, alpha=0.6, s=40)
-    axes[2].axhline(y=3, color='orange', linestyle='--', linewidth=1, alpha=0.7)
-    axes[2].axhline(y=5, color='red', linestyle='--', linewidth=1, alpha=0.7)
-    axes[2].axhline(y=10, color='darkred', linestyle='--', linewidth=1, alpha=0.7)
-    axes[2].set_xlabel('MAE (tCO2/h)')
-    axes[2].set_ylabel('Razao MSE/MAE²')
-    axes[2].set_title('MAE vs Instabilidade')
-    axes[2].set_xscale('log')
-    axes[2].set_yscale('log')
-    axes[2].legend()
-    axes[2].grid(True, alpha=0.3)
-    
-    plt.suptitle('Análise Geral de Instabilidade dos Modelos', fontsize=14)
-    plt.tight_layout()
-    os.makedirs(os.path.join('Resultados', 'Gráficos'), exist_ok=True)
-    plt.savefig(os.path.join('Resultados', 'Gráficos', 'Instabilidade Geral.png'), dpi=150, bbox_inches='tight')
-    plt.close()
-    
-    # Salvar dados de instabilidade
-    os.makedirs(os.path.join('Resultados', 'Erros'), exist_ok=True)
-    df_analise.to_parquet(os.path.join('Resultados', 'Erros', 'Por Usina.parquet'))
+    elif graphs == 2:
+        path = os.path.join('Resultados', 'Gráficos', 'Unificados')
+        
+        # Cria a figura com subplots
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        
+        # Chama cada função com o axes correspondente
+        distribuicao(df_analise, axes[0], ext, path)
+        categorias(df_analise, axes[1], ext, path)
+        dispersao(df_analise, axes[2], ext, path)
+        
+        # Ajusta e salva a figura completa
+        plt.suptitle('Análise Geral da Instabilidade dos Modelos', fontsize=16)
+        plt.tight_layout()
+        plt.savefig(os.path.join(path, f'Gerais{ext}'), dpi=300, bbox_inches='tight')
+        plt.close()
     
     return df_analise
 
 def plotar_analise_usina(resultados_df, usina_alvo):
     """
     Analise detalhada de instabilidade para uma usina especifica
-    Salva o grafico em: Dados Tratados/[usina]/Graficos/Instabilidade.png
+    Salva o grafico em: Usinas/[usina]/Minimização/Graficos/Instabilidade.png
     """
     if usina_alvo not in resultados_df['usina'].values:
         return
@@ -357,8 +588,8 @@ RECOMENDAÇÃO:
     plt.suptitle(f'Análise de Instabilidade - {usina_alvo}', fontsize=14)
     plt.tight_layout()
     
-    # Salvar na pasta da usina em Dados Tratados/[usina]/Graficos/
-    pasta_usina = os.path.join('Dados Tratados', usina_alvo, 'Gráficos')
+    # Salvar na pasta da usina em Usinas/[usina]/Graficos/
+    pasta_usina = os.path.join('Usinas', usina_alvo, 'Minimização', 'Gráficos')
     os.makedirs(pasta_usina, exist_ok=True)
     plt.savefig(os.path.join(pasta_usina, 'Instabilidade.png'), dpi=150, bbox_inches='tight')
     plt.close()
@@ -366,11 +597,11 @@ RECOMENDAÇÃO:
 def plotar_erro_temporal(usina):
     """
     Analisa erro temporal de uma usina específica
-    Salva gráficos na pasta da usina: Dados Tratados/[usina]/Graficos/
+    Salva gráficos na pasta da usina: Usinas/[usina]/Graficos/
     """
     # Caminhos
-    caminho_predicoes = os.path.join('Dados Tratados', usina, 'Rede Neural', 'Historicos', 'Predições.parquet')
-    caminho_dados = os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Teste.parquet')
+    caminho_predicoes = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Historicos', 'Predições.parquet')
+    caminho_dados = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Teste.parquet')
     
     if not os.path.exists(caminho_predicoes):
         return None
@@ -487,16 +718,31 @@ def plotar_erro_temporal(usina):
     plt.tight_layout()
     
     # Salvar gráfico na pasta da usina
-    pasta_usina = os.path.join('Dados Tratados', usina, 'Gráficos')
+    pasta_usina = os.path.join('Usinas', usina, 'Minimização', 'Gráficos')
     os.makedirs(pasta_usina, exist_ok=True)
     plt.savefig(os.path.join(pasta_usina, 'Erro Temporal.png'), dpi=150, bbox_inches='tight')
     plt.close()
-    
+
+def configs(msg, intervalo):
+    while True:
+        os.system('cls')
+        resp = int(input(msg))
+        if resp in intervalo:
+            return resp
+        print('Opção inválida!')
+        time.sleep(3)
+
 def main():
+    graphs = configs('Gráficos individuais ou unificados?\n(1 - Individuais | 2 - Unificados): ', [1, 2])
+    
+    ext = configs('Qual o tipo de gráfico?\n(1 - PNG | 2 - SVG): ', [1, 2])
+    ext_dict = {1: '.png', 2: '.svg'}
+    ext = ext_dict[ext]
+    
     resultados = []
     
-    for usina in os.listdir('Dados Tratados'):
-        caminho_teste = os.path.join('Dados Tratados', usina, 'Rede Neural', 'Históricos', 'Teste.parquet')
+    for usina in os.listdir('Usinas'):
+        caminho_teste = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Históricos', 'Teste.parquet')
         
         if os.path.exists(caminho_teste):
             df_teste = pd.read_parquet(caminho_teste)
@@ -524,8 +770,8 @@ def main():
     df_resultados.to_parquet(os.path.join('Resultados', 'Erros', 'Por Usina.parquet'))
     df_geral.to_parquet(os.path.join('Resultados', 'Erros', 'Gerais.parquet'))
     
-    plotar_gerais(df_resultados)
-    plotar_instabilidade_geral(df_resultados)
+    plotar_gerais(df_resultados, graphs, ext)
+    plotar_instabilidade_geral(df_resultados, graphs, ext)
     
     # Gerar grafico para cada usina
     for usina in df_resultados['usina'].values:

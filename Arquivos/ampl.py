@@ -42,8 +42,8 @@ def ampl_model(usina):
     tab = pd.DataFrame({'Coeficientes':['Alpha','Beta','Gamma','Omega','Mu', 'MSE'],
                         'Valores Estáticos':[alpha,beta,gamma,omega,mu, MSE_est]})
     
-    os.makedirs(f'Dados Tratados\\{usina}\\Emissões Sintéticas', exist_ok=True)
-    tab.to_parquet(f'Dados Tratados\\{usina}\\Emissões Sintéticas\\Coeficientes.parquet',index=False)
+    os.makedirs(f'Usinas\\{usina}\\Minimização\\Emissões', exist_ok=True)
+    tab.to_parquet(f'Usinas\\{usina}\\Minimização\\Emissões\\Coeficientes.parquet',index=False)
 
 def main(multiprocessamento=False):
     # Para que o multiprocessamento seja ativado, é necessário que o código seja executado dentro do arquivo principal (main)
@@ -55,7 +55,7 @@ def main(multiprocessamento=False):
         if num_nucleos < 1 or num_nucleos > multiprocessing.cpu_count() - 1:
             raise ValueError(f'Número de threads deve ser entre 1 e {multiprocessing.cpu_count() - 1}.')
 
-        usinas = os.listdir('Dados Tratados')
+        usinas = os.listdir('Usinas')
 
         # Lista para armazenar os processos
         processos = []
@@ -92,7 +92,7 @@ def main(multiprocessamento=False):
 
     else:
         print('Para ativar o multiprocessamento, execute o arquivo ampl.py')
-        for usina in os.listdir('Dados Tratados'):
+        for usina in os.listdir('Usinas'):
             ampl_model(usina)
             
 if __name__ == '__main__':

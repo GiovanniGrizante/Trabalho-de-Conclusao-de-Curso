@@ -11,16 +11,16 @@ def main():
         horas[ano] = 8784 if int(ano) % 4 == 0 else 8760
     
     
-    for usina in os.listdir('Dados Tratados'):
+    for usina in os.listdir('Usinas'):
         horas_expandidas = []
         anos_expandidos = []
 
         # Geração dos dados de emissão horária por usina
-        PG = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Dados Externos', 'ONS.parquet'))['Geração']
+        PG = pd.read_parquet(os.path.join('Usinas', usina, 'Dados Externos', 'ONS.parquet'))['Geração']
         emissao = []
 
-        if os.path.isfile(os.path.join('Dados Tratados', usina, 'Emissões Sintéticas', 'Coeficientes.parquet')):
-            tab = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Emissões Sintéticas', 'Coeficientes.parquet'))
+        if os.path.isfile(os.path.join('Usinas', usina, 'Minimização', 'Emissões', 'Coeficientes.parquet')):
+            tab = pd.read_parquet(os.path.join('Usinas', usina, 'Minimização', 'Emissões', 'Coeficientes.parquet'))
 
             alpha = tab['Valores Estáticos'].loc[tab['Coeficientes'] == 'Alpha'].item()
             beta = tab['Valores Estáticos'].loc[tab['Coeficientes'] == 'Beta'].item()
@@ -44,7 +44,7 @@ def main():
                 'Emissão': emissao
             })
             
-            dir = os.path.join('Dados Tratados', usina)
+            dir = os.path.join('Usinas', usina)
             df.to_parquet(f'{dir}\\Emissões Sintéticas\\Horárias.parquet', index=False)
             df = df.groupby('Ano')['Emissão'].sum().reset_index()
             
@@ -57,4 +57,4 @@ def main():
         
         else:
             os.makedirs('Usinas Problemáticas', exist_ok=True)
-            shutil.move(f'Dados Tratados\\{usina}', 'Usinas Problemáticas')
+            shutil.move(f'Usinas\\{usina}', 'Usinas Problemáticas')

@@ -286,13 +286,13 @@ def main():
     LOOKBACK_CURTO = 48   # 3 dias (transições abruptas)
     
     # Loop para cada usina
-    for usina in os.listdir('Dados Tratados'):
+    for usina in os.listdir('Usinas'):
         # print(f"\n📊 Processando usina: {usina}")
         
         # Carregar dados
-        df_tr = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Treino.parquet'))
-        df_val = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Validação.parquet'))
-        df_te = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Teste.parquet'))
+        df_tr = pd.read_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Treino.parquet'))
+        df_val = pd.read_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Validação.parquet'))
+        df_te = pd.read_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Teste.parquet'))
 
         # Coluna alvo
         target_col = 'Emissão'
@@ -331,8 +331,8 @@ def main():
         horizon_real = ytr.shape[1]
 
         # Criar diretórios para salvar resultados
-        modelo_dir = os.path.join("Dados Tratados", usina, 'Rede Neural', 'Modelos')
-        historico_dir = os.path.join("Dados Tratados", usina, 'Rede Neural', 'Históricos')
+        modelo_dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Modelos')
+        historico_dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Históricos')
         os.makedirs(modelo_dir, exist_ok=True)
         os.makedirs(historico_dir, exist_ok=True)
 
@@ -364,15 +364,8 @@ def main():
         train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=256, shuffle=False)
         test_loader = DataLoader(test_dataset, batch_size=256, shuffle=False)
-        
-        # PARA TESTE
-        print(f"\n📊 Preparando usina: {usina}")
-        print(f"  Treino: {Xtr_longo.shape[0]} sequências")
-        print(f"  Validação: {Xva_longo.shape[0]} sequências")
-        print(f"  Teste: {Xte_longo.shape[0]} sequências")
 
         if Xtr_longo.shape[0] == 0:
-            print(f"  ❌ SEM SEQUÊNCIAS DE TREINO! Pulando usina.")
             continue  # Pula esta usina
 
 
@@ -383,76 +376,17 @@ def main():
             model.load_state_dict(torch.load(modelo_path, map_location=device))
             model = model.to(device)
         else:
-            # Verificar estatísticas dos dados
-            print(f"  📊 Estatísticas das emissões:")
-            print(f"     Min: {df_tr['Emissão'].min():.2f}")
-            print(f"     Max: {df_tr['Emissão'].max():.2f}")
-            print(f"     Mean: {df_tr['Emissão'].mean():.2f}")
-            print(f"     Std: {df_tr['Emissão'].std():.2f}")
-
-            print(f"  📊 Estatísticas da geração:")
-            print(f"     Min: {df_tr['Geração'].min():.2f}")
-            print(f"     Max: {df_tr['Geração'].max():.2f}")
-            print(f"     Mean: {df_tr['Geração'].mean():.2f}")
-
-            # Verificar valores infinitos ou muito grandes
-            if df_tr['Emissão'].abs().max() > 1e10:
-                print(f"  ⚠️ Valores extremos nas emissões!")
+            # Criar e treinar novo modelo
+            model = criar_modelo_duplo(n_dyn, n_sta, horizon_real)
+            model, history = treinar_modelo_duplo(model, train_loader, val_loader)
             
-            print(f"  Iniciando treinamento...")
-            try:
-                model = criar_modelo_duplo(n_dyn, n_sta, horizon_real)
-                model, history = treinar_modelo_duplo(model, train_loader, val_loader)
-                
-                # Verificar se history tem dados
-                if not history or len(history['loss']) == 0:
-                    print(f"  ❌ TREINAMENTO FALHOU! Nenhum histórico gerado.")
-                    continue
-                    
-                print(f"  ✅ Treinamento concluído: {len(history['loss'])} épocas")
-
-                # ===== VERIFICAR NaN =====
-                if any(np.isnan(history['loss'])) or any(np.isnan(history['val_loss'])):
-                    print(f"  ⚠️ NaN detectado no histórico! Último loss: {history['loss'][-1]}")
-                    print(f"  ❌ Modelo com NaN - NÃO salvando!")
-                    continue  # Pula esta usina
-
-                # Verificar se loss é razoável
-                if history['loss'][-1] > 1e6 or history['val_loss'][-1] > 1e6:
-                    print(f"  ⚠️ Loss muito alto! Loss: {history['loss'][-1]}, Val Loss: {history['val_loss'][-1]}")
-                    print(f"  ❌ Modelo divergiu - NÃO salvando!")
-                    continue
-
-                print(f"  ✅ Valores normais - salvando...")
-                # =========================
-                                
-                # # Salvar modelo
-                torch.save(model.state_dict(), modelo_path)
-                
-                # Salvar histórico
-                history_df = pd.DataFrame(history)
-                history_df.insert(0, "epoch", np.arange(1, len(history_df) + 1))
-                history_df.to_parquet(history_path, index=False)
-                
-            except Exception as e:
-                print(f"  ❌ ERRO no treinamento: {e}")
-                continue
+            # Salvar modelo
+            torch.save(model.state_dict(), modelo_path)
             
-            
-            
-            
-            # # Criar e treinar novo modelo
-            # # print(f"  Treinando novo modelo...")
-            # model = criar_modelo_duplo(n_dyn, n_sta, horizon_real)
-            # model, history = treinar_modelo_duplo(model, train_loader, val_loader)
-            
-            # # Salvar modelo
-            # torch.save(model.state_dict(), modelo_path)
-            
-            # # Salvar histórico
-            # history_df = pd.DataFrame(history)
-            # history_df.insert(0, "epoch", np.arange(1, len(history_df) + 1))
-            # history_df.to_parquet(history_path, index=False)
+            # Salvar histórico
+            history_df = pd.DataFrame(history)
+            history_df.insert(0, "epoch", np.arange(1, len(history_df) + 1))
+            history_df.to_parquet(history_path, index=False)
 
         # Avaliar no teste
         test_loss, test_mae, test_mse, y_true_all, y_pred_all = avaliar_modelo_duplo(model, test_loader)

@@ -5,9 +5,9 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 def tratamento_dados(iema_recente):
     # Mesclagem e normalização dos dados por usina
-    for usina in os.listdir('Dados Tratados'):
-        geracao = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Dados Externos', f'ONS.parquet'))
-        emissao = pd.read_parquet(os.path.join('Dados Tratados', usina, 'Emissões Sintéticas', f'Horárias.parquet'))
+    for usina in os.listdir('Usinas'):
+        geracao = pd.read_parquet(os.path.join('Usinas', usina, 'Dados Externos', f'ONS.parquet'))
+        emissao = pd.read_parquet(os.path.join('Usinas', usina, 'Minimização', 'Emissões', f'Horárias.parquet'))
         
         try:
             unitarios = iema_recente[iema_recente['Usina'] == usina].drop(columns=['Usina']).reset_index(drop=True)
@@ -95,13 +95,13 @@ def tratamento_dados(iema_recente):
         df_te = pd.DataFrame(data_te, columns=transf.get_feature_names_out())
         
         # Salvar os dataframes em formato parquet
-        os.makedirs(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados'), exist_ok=True)
-        df_tr.to_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Treino.parquet'), index=False)
-        df_val.to_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Validação.parquet'), index=False)
-        df_te.to_parquet(os.path.join('Dados Tratados', usina, 'Rede Neural', 'Dados', 'Teste.parquet'), index=False)
+        os.makedirs(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados'), exist_ok=True)
+        df_tr.to_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Treino.parquet'), index=False)
+        df_val.to_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Validação.parquet'), index=False)
+        df_te.to_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Teste.parquet'), index=False)
         
 def main():
-    # Ler a tabela mais recente do IEMA e filtrar os dados para as usinas presentes na pasta "Dados Tratados"
+    # Ler a tabela mais recente do IEMA e filtrar os dados para as usinas presentes na pasta "Usinas"
     iema_recente = pd.read_excel(os.path.join('IEMA/Tabelas', sorted(os.listdir('IEMA/Tabelas'))[-1]))
 
     colunas_remover = ['Município', 
@@ -109,11 +109,11 @@ def main():
                     'Emissões de Gases [tCO2]', 
                     'Taxa de Emissão [tCO2/GWh]']
 
-    if os.listdir('Dados Tratados')[0][:3] == 'UTE':
-        iema_recente = iema_recente[iema_recente[f'CEG'].isin(os.listdir('Dados Tratados'))].reset_index(drop=True)
+    if os.listdir('Usinas')[0][:3] == 'UTE':
+        iema_recente = iema_recente[iema_recente[f'CEG'].isin(os.listdir('Usinas'))].reset_index(drop=True)
         colunas_remover.append('Usina')
     else:
-        iema_recente = iema_recente[iema_recente[f'Usina'].isin(os.listdir('Dados Tratados'))].reset_index(drop=True)
+        iema_recente = iema_recente[iema_recente[f'Usina'].isin(os.listdir('Usinas'))].reset_index(drop=True)
         colunas_remover.append('CEG')
 
     iema_recente = iema_recente.drop(columns=colunas_remover)

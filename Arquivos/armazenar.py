@@ -2,7 +2,7 @@ import os, pandas as pd
 
 # Função para armazenar os dados no formato escolhido pelo usuário
 def criar_parquet(usina, tab_ons, tab_iema):
-    dir = os.path.join('Dados Tratados', usina, 'Dados Externos')
+    dir = os.path.join('Usinas', usina, 'Dados Externos')
 
     if os.path.exists(dir):
         tab_ons.to_parquet(f'{dir}\\ONS.parquet', index=False)
