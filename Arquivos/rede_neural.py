@@ -105,105 +105,181 @@ def criar_modelo_duplo(n_dyn, n_sta, horizon):
     return model
 
 # Função de treinamento (adaptada para o modelo duplo)
-def treinar_modelo_duplo(model, train_loader, val_loader, epochs=100, patience=10, 
-                          huber_delta=0.5, peso_transicao=8.0, clip_grad=0.5):
+
+def treinar_modelo_duplo(
+    model,
+    train_loader,
+    val_loader,
+    previsao,
+    dyn_cols,                     # Para localizar PG
+    pg_mean,                      # Para desnormalizar PG
+    pg_std,                       # Para desnormalizar PG
+    epochs=100,
+    patience=10,
+    huber_delta=0.5,
+    peso_transicao=8.0,
+    clip_grad=0.5,
+    lambda_fis=0.2                # Peso da física
+):
     """
-    Treina o modelo com early stopping e reduce learning rate
-    Usa HUBER LOSS como função de custo (robusto a outliers)
+    Treina o modelo com Early Stopping e ReduceLR.
+    Caso previsao == '2', adiciona termo Physics-Informed na loss.
     """
     model = model.to(device)
-    
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+
+    # Transforma os dados de normalização em tensores
+    pg_mean = torch.tensor(pg_mean, device=device)
+    pg_std  = torch.tensor(pg_std, device=device)
+
+    # =============================
+    # PARÂMETROS FÍSICOS TREINÁVEIS
+    # =============================
+    alpha = nn.Parameter(torch.tensor(0.1, device=device))
+    beta  = nn.Parameter(torch.tensor(0.1, device=device))
+    gamma = nn.Parameter(torch.tensor(0.01, device=device))
+    omega = nn.Parameter(torch.tensor(0.05, device=device))
+    mu    = nn.Parameter(torch.tensor(1e-4, device=device))     # Iniciar com valor pequeno para evitar explosão do resultado
+
+    # =============================
+    # Função física (equação guia)
+    # =============================
+    def emissao_fisica(PG):
+        """
+        PG: tensor [batch] ou [batch, horizon]
+        Retorna emissões físicas >= 0
+        """
+        emissao = (
+            alpha
+            + beta * PG
+            + gamma * PG**2
+            + omega * torch.exp(mu * PG)
+        )
+        return torch.relu(emissao)  # não-negatividade física
+
+    # =============================
+    # OPTIMIZER (modelo + física)
+    # =============================
+    optimizer = optim.Adam(
+        list(model.parameters()) + [alpha, beta, gamma, omega, mu],
+        lr=1e-3
+    )
+
     criterion_huber = nn.HuberLoss(delta=huber_delta)
     criterion_mae = nn.L1Loss()
     criterion_mse = nn.MSELoss()
-    
+
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.5, patience=5, min_lr=1e-5
     )
-    
+
     best_val_loss = float('inf')
     patience_counter = 0
     best_model_state = None
-    
+
     history = {
         'loss': [], 'mae': [], 'mse': [],
         'val_loss': [], 'val_mae': [], 'val_mse': []
     }
-    
+
+    idx_pg = dyn_cols.index("Geração")  # índice do PG nas dinâmicas
+
     for epoch in range(epochs):
-        # === TREINAMENTO ===
+
+        # =============================
+        # TREINAMENTO
+        # =============================
         model.train()
-        train_loss = 0
-        train_mae = 0
-        train_mse = 0
-        
+        train_loss = train_mae = train_mse = 0.0
+
         for x_seq_longo, x_seq_curto, x_sta, y in train_loader:
             x_seq_longo = x_seq_longo.to(device)
             x_seq_curto = x_seq_curto.to(device)
             x_sta = x_sta.to(device)
             y = y.to(device)
-            
+
             optimizer.zero_grad()
+
             output = model(x_seq_longo, x_seq_curto, x_sta)
-            
-            loss = criterion_huber(output, y)
-            
-            # Pesos maiores para transições
+
+            # ===== LOSS DE DADOS =====
+            loss_data = criterion_huber(output, y)
+
+            # ===== PESOS MAIORES EM TRANSIÇÕES =====
             is_transicao = x_sta[:, 0] == 1
-            weight = torch.where(is_transicao, 
-                                torch.tensor(peso_transicao).to(device), 
-                                torch.tensor(1.0).to(device))
-            loss = (loss * weight).mean()
-            
+            weight = torch.where(
+                is_transicao,
+                torch.tensor(peso_transicao, device=device),
+                torch.tensor(1.0, device=device)
+            )
+            loss_data = (loss_data * weight).mean()
+
+            # ===== LOSS FÍSICA (PINN) =====
+            if previsao == '2':
+                # PG no instante de previsão
+                PG = x_seq_curto[:, -1, idx_pg]  # [batch]
+
+                # Ajuste para horizonte > 1
+                if output.ndim == 2 and output.shape[1] > 1:
+                    PG = PG.unsqueeze(1).repeat(1, output.shape[1])
+
+                # Desnormalização dos dados de geração
+                PG = PG * pg_std + pg_mean
+
+                emissao_fis = emissao_fisica(PG)
+
+                loss_fis = nn.MSELoss()(output, emissao_fis)
+
+                loss = loss_data + lambda_fis * loss_fis
+            else:
+                loss = loss_data
+
             loss.backward()
-            
-            # ===== GRADIENT CLIPPING =====
+
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_grad)
-            # =============================
-            
             optimizer.step()
-            
+
             train_loss += loss.item()
-            train_mae += criterion_mae(output, y).mean().item()
-            train_mse += criterion_mse(output, y).mean().item()
-        
+            train_mae += criterion_mae(output, y).item()
+            train_mse += criterion_mse(output, y).item()
+
         train_loss /= len(train_loader)
         train_mae /= len(train_loader)
         train_mse /= len(train_loader)
-        
-        # === VALIDAÇÃO ===
+
+        # =============================
+        # VALIDAÇÃO
+        # =============================
         model.eval()
-        val_loss = 0
-        val_mae = 0
-        val_mse = 0
-        
+        val_loss = val_mae = val_mse = 0.0
+
         with torch.no_grad():
             for x_seq_longo, x_seq_curto, x_sta, y in val_loader:
                 x_seq_longo = x_seq_longo.to(device)
                 x_seq_curto = x_seq_curto.to(device)
                 x_sta = x_sta.to(device)
                 y = y.to(device)
-                
+
                 output = model(x_seq_longo, x_seq_curto, x_sta)
-                
-                val_loss += criterion_huber(output, y).mean().item()
-                val_mae += criterion_mae(output, y).mean().item()
-                val_mse += criterion_mse(output, y).mean().item()
-        
+
+                loss_val = criterion_huber(output, y).mean()
+
+                val_loss += loss_val.item()
+                val_mae += criterion_mae(output, y).item()
+                val_mse += criterion_mse(output, y).item()
+
         val_loss /= len(val_loader)
         val_mae /= len(val_loader)
         val_mse /= len(val_loader)
-        
-        history['loss'].append(round(train_loss,3))
-        history['mae'].append(round(train_mae,3))
-        history['mse'].append(round(train_mse,3))
-        history['val_loss'].append(round(val_loss,3))
-        history['val_mae'].append(round(val_mae,3))
-        history['val_mse'].append(round(val_mse,3))
-        
+
+        history['loss'].append(round(train_loss, 3))
+        history['mae'].append(round(train_mae, 3))
+        history['mse'].append(round(train_mse, 3))
+        history['val_loss'].append(round(val_loss, 3))
+        history['val_mae'].append(round(val_mae, 3))
+        history['val_mse'].append(round(val_mse, 3))
+
         scheduler.step(val_loss)
-        
+
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             patience_counter = 0
@@ -212,14 +288,12 @@ def treinar_modelo_duplo(model, train_loader, val_loader, epochs=100, patience=1
             patience_counter += 1
             if patience_counter >= patience:
                 break
-        
-        # if epoch % 10 == 0:
-        #     print(f"Época {epoch}: Train Loss={train_loss:.4f}, Val Loss={val_loss:.4f}")
-    
+
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
-    
+
     return model, history
+
 
 # Função para avaliar o modelo no teste (adaptada)
 def avaliar_modelo_duplo(model, test_loader):
@@ -288,9 +362,19 @@ def main(previsao):
     for usina in os.listdir('Usinas'):
         
         # Carregar dados
-        df_tr = pd.read_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Treino.parquet'))
-        df_val = pd.read_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Validação.parquet'))
-        df_te = pd.read_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Teste.parquet'))
+        if previsao == '1':
+            dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados')
+        else:
+            dir = os.path.join('Usinas', usina, 'PGNM', 'Rede Neural', 'Dados')
+
+        df_tr = pd.read_parquet(os.path.join(dir, 'Treino.parquet'))
+        df_val = pd.read_parquet(os.path.join(dir, 'Validação.parquet'))
+        df_te = pd.read_parquet(os.path.join(dir, 'Teste.parquet'))
+        df_scaler = pd.read_parquet(os.path.join(dir, 'Scaler Geração.parquet'))
+
+        # Carregar dados para desnormalização e transformá-los em tensores
+        pg_mean = float(df_scaler.loc[0, 'Mean'])
+        pg_std = float(df_scaler.loc[0, 'Std'])
 
         # Coluna alvo
         target_col = 'Emissão'
@@ -329,8 +413,13 @@ def main(previsao):
         horizon_real = ytr.shape[1]
 
         # Criar diretórios para salvar resultados
-        modelo_dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Modelos')
-        historico_dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Históricos')
+        if previsao == '1':
+            modelo_dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Modelos')
+            historico_dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Históricos')
+        else:
+            modelo_dir = os.path.join('Usinas', usina, 'PGNM', 'Rede Neural', 'Modelos')
+            historico_dir = os.path.join('Usinas', usina, 'PGNM', 'Rede Neural', 'Históricos')
+
         os.makedirs(modelo_dir, exist_ok=True)
         os.makedirs(historico_dir, exist_ok=True)
 
@@ -366,7 +455,6 @@ def main(previsao):
         if Xtr_longo.shape[0] == 0:
             continue  # Pula esta usina
 
-
         if os.path.exists(modelo_path) and not treinar:
             # Carregar modelo salvo
             # print(f"  Carregando modelo existente...")
@@ -376,8 +464,17 @@ def main(previsao):
         else:
             # Criar e treinar novo modelo
             model = criar_modelo_duplo(n_dyn, n_sta, horizon_real)
-            model, history = treinar_modelo_duplo(model, train_loader, val_loader)
             
+            model, history = treinar_modelo_duplo(
+                model,
+                train_loader,
+                val_loader,
+                previsao=previsao,
+                dyn_cols=dyn_cols,
+                pg_mean = pg_mean,
+                pg_std = pg_std
+            )
+
             # Salvar modelo
             torch.save(model.state_dict(), modelo_path)
             

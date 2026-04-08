@@ -72,9 +72,7 @@ def tratamento_dados(iema_recente, previsao):
         categoricas = ['Categoria de geração']
         
         # Adicionar outras colunas numéricas, se necessário
-        numericas = ['Duração da Transição', 'Fase da Transição']
-        if previsao == '1':
-            numericas.append('Geração')
+        numericas = ['Geração', 'Duração da Transição', 'Fase da Transição']
 
         # Configurar o ColumnTransformer para aplicar OneHotEncoder nas colunas categóricas e StandardScaler nas colunas numéricas
         transf = ColumnTransformer(transformers=[
@@ -100,16 +98,30 @@ def tratamento_dados(iema_recente, previsao):
         df_tr = pd.DataFrame(data_tr, columns=transf.get_feature_names_out())
         df_val = pd.DataFrame(data_val, columns=transf.get_feature_names_out())
         df_te = pd.DataFrame(data_te, columns=transf.get_feature_names_out())
+
+        # Dataframe com os dados de normalização para aplicação na equação da rede PGNM
+        scaler = transf.named_transformers_['scaler']
+
+        # Posição da coluna "Geração" dentro de numericas
+        idx_pg = numericas.index('Geração')
+
+        df_norm = pd.DataFrame({
+            'Variável': ['Geração'],
+            'Mean': [scaler.mean_[idx_pg]],
+            'Std': [scaler.scale_[idx_pg]]
+        })
         
         # Salvar os dataframes em formato parquet
         if previsao == '1':
             dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados')
         else:
             dir = os.path.join('Usinas', usina, 'PGNM', 'Rede Neural', 'Dados')
+
         os.makedirs(os.path.join(dir), exist_ok=True)
         df_tr.to_parquet(os.path.join(dir, 'Treino.parquet'), index=False)
         df_val.to_parquet(os.path.join(dir, 'Validação.parquet'), index=False)
         df_te.to_parquet(os.path.join(dir, 'Teste.parquet'), index=False)
+        df_norm.to_parquet(os.path.join(dir, 'Scaler Geração.parquet'), index=False)
 
 
 def main(previsao):
