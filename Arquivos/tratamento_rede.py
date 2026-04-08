@@ -1,9 +1,9 @@
-import os, pandas as pd, multiprocessing, sys, numpy as np
+import os, pandas as pd, numpy as np, sys
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-
-def tratamento_dados(iema_recente):
+# Tratar os dados, aplicando OneHotEncoder e normalizando. Salva os arquivos tratados.
+def tratamento_dados(iema_recente, previsao):
     # Mesclagem e normalização dos dados por usina
     for usina in os.listdir('Usinas'):
         geracao = pd.read_parquet(os.path.join('Usinas', usina, 'Dados Externos', f'ONS.parquet'))
@@ -13,9 +13,12 @@ def tratamento_dados(iema_recente):
             unitarios = iema_recente[iema_recente['Usina'] == usina].drop(columns=['Usina']).reset_index(drop=True)
         except KeyError:
             unitarios = iema_recente[iema_recente['CEG'] == usina].drop(columns=['CEG']).reset_index(drop=True)
-            
+        
         # Unificação dos dados de geração, emissão e dados unitários
-        df = pd.merge(geracao, emissao, on=None, how='left').merge(unitarios, on=None, how='cross')
+        if previsao == '1':
+            df = pd.merge(geracao, emissao, on=None, how='left').merge(unitarios, on=None, how='cross')
+        else:
+            df = geracao.merge(unitarios, on=None, how='cross')
         
         
         # == TRANSFORMAÇÃO DAS HORAS (ÍNDICE) EM VALORES CÍCLICOS ==
@@ -67,7 +70,11 @@ def tratamento_dados(iema_recente):
         
         # Definir as colunas categóricas e numéricas para o ColumnTransformer
         categoricas = ['Categoria de geração']
-        numericas = ['Geração', 'Duração da Transição', 'Fase da Transição']  # Adicionar outras colunas numéricas, se necessário
+        
+        # Adicionar outras colunas numéricas, se necessário
+        numericas = ['Duração da Transição', 'Fase da Transição']
+        if previsao == '1':
+            numericas.append('Geração')
 
         # Configurar o ColumnTransformer para aplicar OneHotEncoder nas colunas categóricas e StandardScaler nas colunas numéricas
         transf = ColumnTransformer(transformers=[
@@ -95,12 +102,17 @@ def tratamento_dados(iema_recente):
         df_te = pd.DataFrame(data_te, columns=transf.get_feature_names_out())
         
         # Salvar os dataframes em formato parquet
-        os.makedirs(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados'), exist_ok=True)
-        df_tr.to_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Treino.parquet'), index=False)
-        df_val.to_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Validação.parquet'), index=False)
-        df_te.to_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Teste.parquet'), index=False)
-        
-def main():
+        if previsao == '1':
+            dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados')
+        else:
+            dir = os.path.join('Usinas', usina, 'PGNM', 'Rede Neural', 'Dados')
+        os.makedirs(os.path.join(dir), exist_ok=True)
+        df_tr.to_parquet(os.path.join(dir, 'Treino.parquet'), index=False)
+        df_val.to_parquet(os.path.join(dir, 'Validação.parquet'), index=False)
+        df_te.to_parquet(os.path.join(dir, 'Teste.parquet'), index=False)
+
+
+def main(previsao):
     # Ler a tabela mais recente do IEMA e filtrar os dados para as usinas presentes na pasta "Usinas"
     iema_recente = pd.read_excel(os.path.join('IEMA/Tabelas', sorted(os.listdir('IEMA/Tabelas'))[-1]))
 
@@ -134,4 +146,4 @@ def main():
     colunas = list(nomes_onehot) + list(colunas_restantes)
 
     iema_recente = pd.DataFrame(data,columns=colunas)
-    tratamento_dados(iema_recente)
+    tratamento_dados(iema_recente, previsao)

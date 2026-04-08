@@ -274,8 +274,7 @@ def obter_iniciais(mensagem, opcoes_validas):
             print("Por favor, digite um número válido.")
 
 
-def main():
-    
+def main(previsao):
     # Pergunta ao usuário se deseja retreinar os modelos ou usar os já treinados.
     treinar = bool(obter_iniciais('Retreinar modelos? (1 - Sim | 0 - Não): ', [0, 1]))
     # Pergunta ao usuário quais os valores de janela de previsão.
@@ -287,7 +286,6 @@ def main():
     
     # Loop para cada usina
     for usina in os.listdir('Usinas'):
-        # print(f"\n📊 Processando usina: {usina}")
         
         # Carregar dados
         df_tr = pd.read_parquet(os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Treino.parquet'))

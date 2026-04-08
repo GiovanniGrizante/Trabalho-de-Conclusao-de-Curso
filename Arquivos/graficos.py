@@ -11,10 +11,7 @@ def plotar_geracao_emissao(usina):
     """
     # Caminhos dos arquivos
     caminho_geracao = os.path.join('Usinas', usina, 'Dados Externos', 'ONS.parquet')
-    caminho_emissao = os.path.join('Usinas', usina, 'Emissões Sintéticas', 'Horárias.parquet')
-    
-    if not os.path.exists(caminho_geracao) or not os.path.exists(caminho_emissao):
-        return
+    caminho_emissao = os.path.join('Usinas', usina, 'Minimização', 'Emissões', 'Horárias.parquet')
     
     # Carregar dados
     df_geracao = pd.read_parquet(caminho_geracao)

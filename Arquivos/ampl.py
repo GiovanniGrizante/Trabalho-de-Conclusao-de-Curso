@@ -94,6 +94,6 @@ def main(multiprocessamento=False):
         print('Para ativar o multiprocessamento, execute o arquivo ampl.py')
         for usina in os.listdir('Usinas'):
             ampl_model(usina)
-            
+
 if __name__ == '__main__':
     main(multiprocessamento=True)

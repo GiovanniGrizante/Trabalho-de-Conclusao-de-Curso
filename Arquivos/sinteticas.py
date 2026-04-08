@@ -45,7 +45,7 @@ def main():
             })
             
             dir = os.path.join('Usinas', usina)
-            df.to_parquet(f'{dir}\\Emissões Sintéticas\\Horárias.parquet', index=False)
+            df.to_parquet(f'{dir}\\Minimização\\Emissões\\Horárias.parquet', index=False)
             df = df.groupby('Ano')['Emissão'].sum().reset_index()
             
             # Cálculo de emissões anuais e respectivos K_i
@@ -53,8 +53,11 @@ def main():
             iema = pd.read_parquet(f'{dir}\\Dados Externos\\IEMA.parquet')['Emissões'].tolist()
             
             df['K_i'] = list(map(lambda x, y: round(x / y, 3), emi_anuais, iema))
-            df.to_parquet(f'{dir}\\Emissões Sintéticas\\Anuais.parquet', index=False)
+            df.to_parquet(f'{dir}\\Minimização\\Emissões\\Anuais.parquet', index=False)
         
         else:
             os.makedirs('Usinas Problemáticas', exist_ok=True)
-            shutil.move(f'Usinas\\{usina}', 'Usinas Problemáticas')
+            try:
+                shutil.move(f'Usinas\\{usina}', 'Usinas Problemáticas')
+            except shutil.Error:
+                shutil.rmtree(f'Usinas\\{usina}')
