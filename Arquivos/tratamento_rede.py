@@ -68,25 +68,34 @@ def tratamento_dados(iema_recente, previsao):
                     fase[i] = 2  # MEIO (qualquer hora que não é início nem fim)
         df['Fase da Transição'] = fase
         
+        # Separar os dados em treino, validação e teste com base no ano. Remover as colunas que não serão usadas como features.
+        removidas = ['Delta menos', 'Delta mais', 'Índice']
+        if previsao == '1':
+            removidas.append('Ano')
+                
+        ano_divisao = 2023
+        x_tr = df[df['Ano'].astype(int) < ano_divisao].reset_index(drop=True).drop(columns=removidas)
+        x_val = df[df['Ano'].astype(int) == ano_divisao].reset_index(drop=True).drop(columns=removidas)
+        x_te = df[df['Ano'].astype(int) > ano_divisao].reset_index(drop=True).drop(columns=removidas)
+
         # Definir as colunas categóricas e numéricas para o ColumnTransformer
         categoricas = ['Categoria de geração']
         
-        # Adicionar outras colunas numéricas, se necessário
-        numericas = ['Geração', 'Duração da Transição', 'Fase da Transição']
-
+        # Adicionar outras colunas numéricas, se necessário.
+        # Dados constantes não podem ser normalizados devido seu desvio ser 0.
+        # A rede aprende que os dados são constantes, não dando peso maior para tais dados.
+        numericas = ['Geração', 
+                     'Duração da Transição', 
+                     'Fase da Transição']
+        
         # Configurar o ColumnTransformer para aplicar OneHotEncoder nas colunas categóricas e StandardScaler nas colunas numéricas
         transf = ColumnTransformer(transformers=[
             ('onehot', OneHotEncoder(sparse_output=False, handle_unknown='ignore'), categoricas),
             ('scaler', StandardScaler(), numericas)],
-                                   remainder='passthrough',  # Mantém constant_cols inalteradas
+                                   remainder='passthrough',  # Mantém demais colunas inalteradas
                                    verbose_feature_names_out=False  # Para nomes mais limpos
                                    )
         
-        # Separar os dados em treino, validação e teste com base no ano. Remover as colunas que não serão usadas como features.
-        x_tr = df[df['Ano'].astype(int) < 2023].reset_index(drop=True).drop(columns=['Delta menos', 'Delta mais', 'Índice', 'Ano'])
-        x_val = df[df['Ano'].astype(int) == 2023].reset_index(drop=True).drop(columns=['Delta menos', 'Delta mais', 'Índice', 'Ano'])
-        x_te = df[df['Ano'].astype(int) > 2023].reset_index(drop=True).drop(columns=['Delta menos', 'Delta mais', 'Índice', 'Ano'])
-
         # Aplicar as transformações usando o ColumnTransformer.
         # Apenas os dados de treino são ajustados (fit) para evitar vazamento de dados, 
         # enquanto os dados de validação e teste são transformados (transform) usando os parâmetros ajustados no treino.

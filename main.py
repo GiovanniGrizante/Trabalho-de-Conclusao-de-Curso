@@ -16,7 +16,7 @@ def gerar_tabela(previsao):
             ['Etapa 5', 'graficos.py', 'Gera os resultados gerais e por usina da RN.'],
             ['Etapa 6', 'previsao.py', 'Executa o modelo para previsão de emissões']
         ]
-    if previsao == '2':
+    else:
         conteudo = [
             ['Etapa 1', 'iema.py\nons.py\narmazenar.py', 'Processa os dados ONS e IEMA.'],
             ['Etapa 2', 'tratamento_rede.py', 'Trata os dados para a RN.'],
@@ -55,9 +55,6 @@ def executar_etapas(previsao):
             3: [lambda: rede_neural.main(previsao)],
             4: [lambda: graficos.main(previsao)]
         })
-    else:
-        print('Erro')
-        sys.exit()
     
     return etapas
     
