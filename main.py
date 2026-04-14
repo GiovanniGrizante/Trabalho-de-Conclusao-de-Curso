@@ -77,6 +77,7 @@ def perguntar_etapas(previsao, etapas):
             time.sleep(4)
     
 if __name__ == '__main__':
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
     while True:
         os.system('cls')
         previsao = input('Qual método de previsão? (1 - Minimização | 2 - RN Híbrida): ')

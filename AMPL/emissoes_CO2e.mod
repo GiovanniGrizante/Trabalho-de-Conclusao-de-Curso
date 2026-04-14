@@ -3,17 +3,13 @@
 # Conjuntos (set) em MAIÚSCULAS
 # Parâmetros (param) em minúsculas
 
-
 # -----------------
 # Conjuntos
 # -----------------
 
 set ANO;
-
 param H {ANO};
-
 set HORARIO {a in ANO} ordered := 0..H[a];
-
 
 # -----------------
 # Parâmetros
@@ -27,28 +23,24 @@ param delta_pg_pos {a in ANO, h in HORARIO[a]};
 
 param S_base := 100;
 
+# Parâmetro de regularização (lambda)
+param lambda := 10;  # ajuste conforme necessidade
 
 # -----------------
 # Variáveis
 # -----------------
 
-var Alpha_est >= 0;      # α - Representa emissões que crescem com o quadrado da geração (carga muito alta)
-var Beta_est;            # β - Representa eficiência em carga parcial (pode ser negativo em algumas faixas)
-var Gamma_est;           # γ - Termo constante (pode ser zero ou positivo)
-var Omega_est;           # ω - Amplitude do termo exponencial (emissões não-lineares)
-var Mu_est;              # μ - Taxa de crescimento das emissões em altas cargas
+var Alpha >= 0;      # α - Representa emissões que crescem com o quadrado da geração (carga muito alta)
+var Beta;            # β - Representa eficiência em carga parcial (pode ser negativo em algumas faixas)
+var Gamma;           # γ - Termo constante (pode ser zero ou positivo)
+var Omega;           # ω - Amplitude do termo exponencial (emissões não-lineares)
+var Mu;              # μ - Taxa de crescimento das emissões em altas cargas
 
-# var Alpha_din_ant >= 0;
-# var Beta_din_ant;
-# var Gamma_din_ant;
-# var Omega_din_ant;
-# var Mu_din_ant;
-
-# var Alpha_din_pos >= 0;
-# var Beta_din_pos;
-# var Gamma_din_pos;
-# var Omega_din_pos;
-# var Mu_din_pos;
+var Alpha_L2 >= 0;
+var Beta_L2;
+var Gamma_L2;
+var Omega_L2;
+var Mu_L2;
 
 # -----------------
 # Restrições Físicas
@@ -56,40 +48,38 @@ var Mu_est;              # μ - Taxa de crescimento das emissões em altas carga
 
 # Emissões nunca podem ser negativas
 subject to Emissao_nao_negativa {a in ANO, h in HORARIO[a]}:
-    Alpha_est * pg[a,h]^2
-    + Beta_est * pg[a,h]
-    + Gamma_est
-    + Omega_est * exp(Mu_est * pg[a,h]) >= 0;
+    Alpha * pg[a,h]^2
+    + Beta * pg[a,h]
+    + Gamma
+    + Omega * exp(Mu * pg[a,h]) >= 0;
+
+subject to Emissao_nao_negativa_L2 {a in ANO, h in HORARIO[a]}:
+    Alpha_L2 * pg[a,h]^2
+    + Beta_L2 * pg[a,h]
+    + Gamma_L2
+    + Omega_L2 * exp(Mu_L2 * pg[a,h]) >= 0;
+
 
 # Emissão zero quando geração é zero (ponto de referência)
 subject to Emissao_no_zero:
-    Gamma_est + Omega_est >= 0;
+    Gamma + Omega >= 0;
+
+subject to Emissao_no_zero_L2:
+    Gamma_L2 + Omega_L2 >= 0;
 
 
 # Emissões horárias estimadas
+var Emissao_horaria {a in ANO, h in HORARIO[a]} =
+    Alpha*pg[a,h]^2
+  + Beta*pg[a,h]
+  + Gamma
+  + Omega*exp(Mu*pg[a,h]);
 
-var Emissao_horaria_est {a in ANO, h in HORARIO[a]} =
-    Alpha_est*pg[a,h]^2
-  + Beta_est*pg[a,h]
-  + Gamma_est
-  + Omega_est*exp(Mu_est*pg[a,h]);
-
-
-# var Emissao_horaria_din {a in ANO, h in HORARIO[a]} =
-#     Alpha_est*pg[a,h]^2
-#   + Beta_est*pg[a,h]
-#   + Gamma_est
-#   + Omega_est*exp(Mu_est*pg[a,h])
-
-#   + Alpha_din_ant*delta_pg_ant[a,h]^2
-#   + Beta_din_ant*delta_pg_ant[a,h]
-#   + Gamma_din_ant
-#   + Omega_din_ant*exp(Mu_din_ant*delta_pg_ant[a,h])
-
-#   + Alpha_din_pos*delta_pg_pos[a,h]^2
-#   + Beta_din_pos*delta_pg_pos[a,h]
-#   + Gamma_din_pos
-#   + Omega_din_pos*exp(Mu_din_pos*delta_pg_pos[a,h]);
+var Emissao_horaria_L2 {a in ANO, h in HORARIO[a]} =
+    Alpha_L2*pg[a,h]^2
+  + Beta_L2*pg[a,h]
+  + Gamma_L2
+  + Omega_L2*exp(Mu_L2*pg[a,h]);
 
 
 # -----------------
@@ -97,48 +87,35 @@ var Emissao_horaria_est {a in ANO, h in HORARIO[a]} =
 # -----------------
 
 # MSE: mean squared error
-
-minimize MSE_est:
+minimize MSE:
     1 / (sum {a in ANO} card(HORARIO[a]))
     * sum {a in ANO}
-        ( sum {h in HORARIO[a]} Emissao_horaria_est[a,h] - emissoes[a] )^2;
+        ( sum {h in HORARIO[a]} Emissao_horaria[a,h] - emissoes[a] )^2;
 
-
-# minimize MSE_din:
-#     1 / (sum {a in ANO} card(HORARIO[a]))
-#     * sum {a in ANO}
-#         ( sum {h in HORARIO[a]} Emissao_horaria_din[a,h] - emissoes[a] )^2;
-
+minimize MSE_L2:
+    1 / (sum {a in ANO} card(HORARIO[a]))
+    * sum {a in ANO}
+        ( sum {h in HORARIO[a]} Emissao_horaria_L2[a,h] - emissoes[a] )^2
+    + lambda * (Alpha_L2^2 + Beta_L2^2 + Gamma_L2^2 + Omega_L2^2 + Mu_L2^2);
 
 # -----------------
 # Problemas
 # -----------------
 
 problem Regressao_Estatica:
-   MSE_est,
-   Emissao_horaria_est,
-   Alpha_est,
-   Beta_est,
-   Gamma_est,
-   Omega_est,
-   Mu_est;
+   MSE,
+   Emissao_horaria,
+   Alpha,
+   Beta,
+   Gamma,
+   Omega,
+   Mu;
 
-
-# problem Regressao_Dinamica:
-#    MSE_din,
-#    Emissao_horaria_din,
-#    Alpha_est,
-#    Beta_est,
-#    Gamma_est,
-#    Omega_est,
-#    Mu_est,
-#    Alpha_din_ant,
-#    Beta_din_ant,
-#    Gamma_din_ant,
-#    Omega_din_ant,
-#    Mu_din_ant,
-#    Alpha_din_pos,
-#    Beta_din_pos,
-#    Gamma_din_pos,
-#    Omega_din_pos,
-#    Mu_din_pos;
+problem Regressao_Estatica_L2:
+   MSE_L2,
+   Emissao_horaria_L2,
+   Alpha_L2,
+   Beta_L2,
+   Gamma_L2,
+   Omega_L2,
+   Mu_L2;

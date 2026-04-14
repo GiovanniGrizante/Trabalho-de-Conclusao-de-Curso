@@ -1,6 +1,6 @@
 from amplpy import AMPL
 import pandas as pd
-import os, time
+import os, time, sys
 import multiprocessing
 
 # Tempo médio de execução para 55 usinas em 1 thread: 2h40min
@@ -30,20 +30,29 @@ def ampl_model(usina):
         return None
     
     # Obter os valores das variáveis de decisão
-    alpha = round(ampl.var['Alpha_est'].value(), 3)
-    beta = round(ampl.var['Beta_est'].value(), 3)
-    gamma = round(ampl.var['Gamma_est'].value(), 3)
-    omega = round(ampl.var['Omega_est'].value(), 3)
-    mu = round(ampl.var['Mu_est'].value(), 3)
+    alpha = round(ampl.var['Alpha'].value(), 3)
+    beta = round(ampl.var['Beta'].value(), 3)
+    gamma = round(ampl.var['Gamma'].value(), 3)
+    omega = round(ampl.var['Omega'].value(), 3)
+    mu = round(ampl.var['Mu'].value(), 3)
 
-    MSE_est = round(ampl.getObjective('MSE_est').value(), 3)
+    alpha_L2 = round(ampl.var['Alpha_L2'].value(), 3)
+    beta_L2 = round(ampl.var['Beta_L2'].value(), 3)
+    gamma_L2 = round(ampl.var['Gamma_L2'].value(), 3)
+    omega_L2 = round(ampl.var['Omega_L2'].value(), 3)
+    mu_L2 = round(ampl.var['Mu_L2'].value(), 3)
+    
+    MSE = round(ampl.getObjective('MSE').value(), 3)
+    MSE_L2 = round(ampl.getObjective('MSE_L2').value(), 3)
 
     # Salvando os resultados em um DataFrame e exportando para CSV
     tab = pd.DataFrame({'Coeficientes':['Alpha','Beta','Gamma','Omega','Mu', 'MSE'],
-                        'Valores Estáticos':[alpha,beta,gamma,omega,mu, MSE_est]})
+                        'Valores Estáticos':[alpha, beta, gamma, omega, mu, MSE],
+                        'Valores - Regressão L2':[alpha_L2, beta_L2, gamma_L2, omega_L2, mu_L2, MSE_L2]})
     
     os.makedirs(f'Usinas\\{usina}\\Minimização\\Emissões', exist_ok=True)
     tab.to_parquet(f'Usinas\\{usina}\\Minimização\\Emissões\\Coeficientes.parquet',index=False)
+    sys.exit()
 
 def main(multiprocessamento=False):
     # Para que o multiprocessamento seja ativado, é necessário que o código seja executado dentro do arquivo principal (main)
@@ -96,4 +105,5 @@ def main(multiprocessamento=False):
             ampl_model(usina)
 
 if __name__ == '__main__':
+    os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     main(multiprocessamento=True)
