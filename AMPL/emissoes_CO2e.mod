@@ -24,7 +24,7 @@ param delta_pg_pos {a in ANO, h in HORARIO[a]};
 param S_base := 100;
 
 # Parâmetro de regularização (lambda)
-param lambda := 10;  # ajuste conforme necessidade
+param lambda := 30;  # ajuste conforme necessidade
 
 # -----------------
 # Variáveis

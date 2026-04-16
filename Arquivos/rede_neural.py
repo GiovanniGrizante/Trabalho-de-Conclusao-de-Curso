@@ -6,6 +6,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
+# Previsão 1 - AMPL
+# Previsão 2 - PINN
+
 # Configurar dispositivo (GPU se disponível)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -205,8 +208,7 @@ def treinar_modelo(
             model.load_state_dict(best_model_state)
         return model, history
     
-    def previsao_2(
-        model, train_loader, val_loader, dyn_cols,
+    def previsao_2(model, train_loader, val_loader, dyn_cols,
         pg_mean, pg_std, emissoes_anuais,
         epochs, patience, clip_grad,
         lambda_fis, lambda_anual):
@@ -388,11 +390,14 @@ def main(previsao):
     # Funções para diferenciar os dados inseridos em cada análise
     
     def previsao_1(previsao):
+        pasta = obter_iniciais('Qual modelo executar? (1 - Padrão | 2 - Regressão L2): ', [1, 2])
+        pasta = 'Padrão' if pasta == 1 else 'Regressão L2'
+        
         treinar = bool(obter_iniciais('Retreinar modelos? (1 - Sim | 0 - Não): ', [0, 1]))
         horizon = obter_iniciais('Qual a janela de previsão? (1h ou 24h): ', [1, 24])
-
+        
         for usina in os.listdir('Usinas'):
-            dir_dados = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados')
+            dir_dados = os.path.join('Usinas', usina, 'Minimização', pasta, 'Rede Neural', 'Dados')
             
             df_tr = pd.read_parquet(os.path.join(dir_dados, 'Treino.parquet'))
             df_val = pd.read_parquet(os.path.join(dir_dados, 'Validação.parquet'))
@@ -423,15 +428,6 @@ def main(previsao):
             n_sta = Xtr_sta.shape[1]
             horizon_real = ytr.shape[1]
 
-            modelo_dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Modelos')
-            historico_dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Históricos')
-            os.makedirs(modelo_dir, exist_ok=True)
-            os.makedirs(historico_dir, exist_ok=True)
-
-            modelo_path = os.path.join(modelo_dir, "best_model.pth")
-            history_path = os.path.join(historico_dir, "Treino.parquet")
-            teste_path = os.path.join(historico_dir, "Teste.parquet")
-
             train_dataset = TensorDataset(
                 torch.FloatTensor(Xtr_dyn),
                 torch.FloatTensor(Xtr_sta),
@@ -448,13 +444,22 @@ def main(previsao):
                 torch.FloatTensor(Xte_sta),
                 torch.FloatTensor(yte)
             )
-
+            
             train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
             val_loader = DataLoader(val_dataset, batch_size=256, shuffle=False)
             test_loader = DataLoader(test_dataset, batch_size=256, shuffle=False)
 
             if Xtr_dyn.shape[0] == 0:
                 continue
+            
+            modelo_dir = os.path.join('Usinas', usina, 'Minimização', pasta, 'Rede Neural', 'Modelos')
+            historico_dir = os.path.join('Usinas', usina, 'Minimização', pasta, 'Rede Neural', 'Históricos')
+            os.makedirs(modelo_dir, exist_ok=True)
+            os.makedirs(historico_dir, exist_ok=True)
+
+            modelo_path = os.path.join(modelo_dir, "best_model.pth")
+            history_path = os.path.join(historico_dir, "Treino.parquet")
+            teste_path = os.path.join(historico_dir, "Teste.parquet")
 
             if os.path.exists(modelo_path) and not treinar:
                 model = criar_modelo(n_dyn, n_sta, horizon_real)
@@ -465,8 +470,8 @@ def main(previsao):
                 model, history = treinar_modelo(previsao=previsao,
                     model=model, train_loader=train_loader, val_loader=val_loader,
                     dyn_cols=dyn_cols, pg_mean=None, pg_std=None,
-                    emissoes_anuais=None
-                )
+                    emissoes_anuais=None)
+                
                 torch.save(model.state_dict(), modelo_path)
                 history_df = pd.DataFrame(history)
                 history_df.insert(0, "epoch", np.arange(1, len(history_df) + 1))
@@ -603,8 +608,3 @@ def main(previsao):
         previsao_1(previsao)
     else:
         previsao_2(previsao)
-
-if __name__ == "__main__":
-    # Exemplo de chamada
-    # previsao = '1' (dados sintéticos) ou '2' (PINN com dados anuais)
-    main(previsao='2')

@@ -46,13 +46,19 @@ def ampl_model(usina):
     MSE_L2 = round(ampl.getObjective('MSE_L2').value(), 3)
 
     # Salvando os resultados em um DataFrame e exportando para CSV
-    tab = pd.DataFrame({'Coeficientes':['Alpha','Beta','Gamma','Omega','Mu', 'MSE'],
-                        'Valores Estáticos':[alpha, beta, gamma, omega, mu, MSE],
-                        'Valores - Regressão L2':[alpha_L2, beta_L2, gamma_L2, omega_L2, mu_L2, MSE_L2]})
+    tab_mse = pd.DataFrame({'Coeficientes':['Alpha','Beta','Gamma','Omega','Mu', 'MSE'],
+                        'Valores':[alpha, beta, gamma, omega, mu, MSE]})
+                        
+    tab_mse_L2 = pd.DataFrame({'Coeficientes':['Alpha','Beta','Gamma','Omega','Mu', 'MSE'],
+                               'Valores':[alpha_L2, beta_L2, gamma_L2, omega_L2, mu_L2, MSE_L2]})
     
-    os.makedirs(f'Usinas\\{usina}\\Minimização\\Emissões', exist_ok=True)
-    tab.to_parquet(f'Usinas\\{usina}\\Minimização\\Emissões\\Coeficientes.parquet',index=False)
-    sys.exit()
+    dir = f'Usinas\\{usina}\\Minimização\\Padrão\\Emissões'
+    os.makedirs(dir, exist_ok=True)
+    tab_mse.to_parquet(f'{dir}\\Coeficientes.parquet',index=False)
+    
+    dir = f'Usinas\\{usina}\\Minimização\\Regressão L2\\Emissões'
+    os.makedirs(dir, exist_ok=True)
+    tab_mse_L2.to_parquet(f'{dir}\\Coeficientes.parquet',index=False)
 
 def main(multiprocessamento=False):
     # Para que o multiprocessamento seja ativado, é necessário que o código seja executado dentro do arquivo principal (main)

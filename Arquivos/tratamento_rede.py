@@ -4,134 +4,134 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 # Tratar os dados, aplicando OneHotEncoder e normalizando. Salva os arquivos tratados.
 def tratamento_dados(iema_recente, previsao):
+    pastas = ['Padrão', 'Regressão L2'] if previsao == '1' else ['Padrão']
     # Mesclagem e normalização dos dados por usina
     for usina in os.listdir('Usinas'):
-        geracao = pd.read_parquet(os.path.join('Usinas', usina, 'Dados Externos', f'ONS.parquet'))
-        emissao = pd.read_parquet(os.path.join('Usinas', usina, 'Minimização', 'Emissões', f'Horárias.parquet'))
-        
-        try:
-            unitarios = iema_recente[iema_recente['Usina'] == usina].drop(columns=['Usina']).reset_index(drop=True)
-        except KeyError:
-            unitarios = iema_recente[iema_recente['CEG'] == usina].drop(columns=['CEG']).reset_index(drop=True)
-        
-        # Unificação dos dados de geração, emissão e dados unitários
-        if previsao == '1':
-            df = pd.merge(geracao, emissao, on=None, how='left').merge(unitarios, on=None, how='cross')
-        else:
-            df = geracao.merge(unitarios, on=None, how='cross')
-        
-        
-        # == TRANSFORMAÇÃO DAS HORAS (ÍNDICE) EM VALORES CÍCLICOS ==
-        # Transformar o índice de horas em valores cíclicos para capturar a natureza periódica dos dados.
-        horas = {}
-        anos = sorted([os.path.splitext(ano)[0] for ano in set(os.listdir('IEMA/Tabelas')) - {'desktop.ini'}])
-        for ano in anos:
-            horas[ano] = 8784 if int(ano) % 4 == 0 else 8760
-        H = df['Ano'].map(horas)  # Obter o número de horas para cada ano
-        theta = 2 * np.pi * df['Índice'] / H  # Calcular o ângulo para cada hora
-
-        df['Cosseno Índice'] = np.cos(theta)
-        df['Seno Índice'] = np.sin(theta)
-
-
-        # == FEATURES DE TRANSIÇÃO ==
-        # Features importantes para a rede neural tratar as transições como um processo, e não como um estado fixo.
-        
-        # Duração da transição
-        # Flag de transição (1 se estiver em transição, 0 caso contrário)
-        transicao_list = list((df['Categoria de geração'] == 0).astype(int))
-        duracao = np.zeros_like(transicao_list, dtype=int)
-        contador = 0
-        for i in range(len(transicao_list)):
-            if transicao_list[i]:
-                contador += 1
+        for pasta in pastas:
+            geracao = pd.read_parquet(os.path.join('Usinas', usina, 'Dados Externos', 'ONS.parquet'))
+            emissao = pd.read_parquet(os.path.join('Usinas', usina, 'Minimização', pasta, 'Emissões', 'Horárias.parquet'))
+            
+            try:
+                unitarios = iema_recente[iema_recente['Usina'] == usina].drop(columns=['Usina']).reset_index(drop=True)
+            except KeyError:
+                unitarios = iema_recente[iema_recente['CEG'] == usina].drop(columns=['CEG']).reset_index(drop=True)
+            
+            # Unificação dos dados de geração, emissão e dados unitários
+            if previsao == '1':
+                df = pd.merge(geracao, emissao, on=None, how='left').merge(unitarios, on=None, how='cross')
             else:
-                contador = 0
-            duracao[i] = contador
-        df['Duração da Transição'] = duracao
-        
-        # Fase da transição
-        fase = np.zeros_like(transicao_list, dtype=int)
-        for i in range(len(transicao_list)):
-            if transicao_list[i]:  # em transição
-                inicio = (i == 0) or (not transicao_list[i-1])  # Verificar se é o início da transição ou se é a primeira linha
-                fim = (i == len(transicao_list) - 1) or (not transicao_list[i+1])  # Verificar se é o fim da transição ou se é a última linha
-                
-                if inicio and fim:
-                    fase[i] = 1  # Transição de apenas uma hora (início e fim ao mesmo tempo)
-                elif inicio:  # hora anterior não era transição
-                    fase[i] = 1  # INÍCIO
-                elif fim:  # próxima hora não será transição
-                    fase[i] = 3  # FIM
+                df = geracao.merge(unitarios, on=None, how='cross')
+            
+            # == TRANSFORMAÇÃO DAS HORAS (ÍNDICE) EM VALORES CÍCLICOS ==
+            # Transformar o índice de horas em valores cíclicos para capturar a natureza periódica dos dados.
+            horas = {}
+            anos = sorted([os.path.splitext(ano)[0] for ano in set(os.listdir('IEMA/Tabelas')) - {'desktop.ini'}])
+            for ano in anos:
+                horas[ano] = 8784 if int(ano) % 4 == 0 else 8760
+            H = df['Ano'].map(horas)  # Obter o número de horas para cada ano
+            theta = 2 * np.pi * df['Índice'] / H  # Calcular o ângulo para cada hora
+
+            df['Cosseno Índice'] = np.cos(theta)
+            df['Seno Índice'] = np.sin(theta)
+
+
+            # == FEATURES DE TRANSIÇÃO ==
+            # Features importantes para a rede neural tratar as transições como um processo, e não como um estado fixo.
+            
+            # Duração da transição
+            # Flag de transição (1 se estiver em transição, 0 caso contrário)
+            transicao_list = list((df['Categoria de geração'] == 0).astype(int))
+            duracao = np.zeros_like(transicao_list, dtype=int)
+            contador = 0
+            for i in range(len(transicao_list)):
+                if transicao_list[i]:
+                    contador += 1
                 else:
-                    # MEIO: pode ser hora 2 de 3, ou hora 2 de 4, etc.
-                    fase[i] = 2  # MEIO (qualquer hora que não é início nem fim)
-        df['Fase da Transição'] = fase
-        
-        # Separar os dados em treino, validação e teste com base no ano. Remover as colunas que não serão usadas como features.
-        removidas = ['Delta menos', 'Delta mais', 'Índice']
-        if previsao == '1':
-            removidas.append('Ano')
-                
-        ano_divisao = 2023
-        x_tr = df[df['Ano'].astype(int) < ano_divisao].reset_index(drop=True).drop(columns=removidas)
-        x_val = df[df['Ano'].astype(int) == ano_divisao].reset_index(drop=True).drop(columns=removidas)
-        x_te = df[df['Ano'].astype(int) > ano_divisao].reset_index(drop=True).drop(columns=removidas)
+                    contador = 0
+                duracao[i] = contador
+            df['Duração da Transição'] = duracao
+            
+            # Fase da transição
+            fase = np.zeros_like(transicao_list, dtype=int)
+            for i in range(len(transicao_list)):
+                if transicao_list[i]:  # em transição
+                    inicio = (i == 0) or (not transicao_list[i-1])  # Verificar se é o início da transição ou se é a primeira linha
+                    fim = (i == len(transicao_list) - 1) or (not transicao_list[i+1])  # Verificar se é o fim da transição ou se é a última linha
+                    
+                    if inicio and fim:
+                        fase[i] = 1  # Transição de apenas uma hora (início e fim ao mesmo tempo)
+                    elif inicio:  # hora anterior não era transição
+                        fase[i] = 1  # INÍCIO
+                    elif fim:  # próxima hora não será transição
+                        fase[i] = 3  # FIM
+                    else:
+                        # MEIO: pode ser hora 2 de 3, ou hora 2 de 4, etc.
+                        fase[i] = 2  # MEIO (qualquer hora que não é início nem fim)
+            df['Fase da Transição'] = fase
+            
+            # Separar os dados em treino, validação e teste com base no ano. Remover as colunas que não serão usadas como features.
+            removidas = ['Delta menos', 'Delta mais', 'Índice']
+            if previsao == '1':
+                removidas.append('Ano')
+                    
+            ano_divisao = 2023
+            x_tr = df[df['Ano'].astype(int) < ano_divisao].reset_index(drop=True).drop(columns=removidas)
+            x_val = df[df['Ano'].astype(int) == ano_divisao].reset_index(drop=True).drop(columns=removidas)
+            x_te = df[df['Ano'].astype(int) > ano_divisao].reset_index(drop=True).drop(columns=removidas)
 
-        # Definir as colunas categóricas e numéricas para o ColumnTransformer
-        categoricas = ['Categoria de geração']
-        
-        # Adicionar outras colunas numéricas, se necessário.
-        # Dados constantes não podem ser normalizados devido seu desvio ser 0.
-        # A rede aprende que os dados são constantes, não dando peso maior para tais dados.
-        numericas = ['Geração', 
-                     'Duração da Transição', 
-                     'Fase da Transição']
-        
-        # Configurar o ColumnTransformer para aplicar OneHotEncoder nas colunas categóricas e StandardScaler nas colunas numéricas
-        transf = ColumnTransformer(transformers=[
-            ('onehot', OneHotEncoder(sparse_output=False, handle_unknown='ignore'), categoricas),
-            ('scaler', StandardScaler(), numericas)],
-                                   remainder='passthrough',  # Mantém demais colunas inalteradas
-                                   verbose_feature_names_out=False  # Para nomes mais limpos
-                                   )
-        
-        # Aplicar as transformações usando o ColumnTransformer.
-        # Apenas os dados de treino são ajustados (fit) para evitar vazamento de dados, 
-        # enquanto os dados de validação e teste são transformados (transform) usando os parâmetros ajustados no treino.
-        data_tr = transf.fit_transform(x_tr)
-        data_val = transf.transform(x_val)
-        data_te = transf.transform(x_te)
+            # Definir as colunas categóricas e numéricas para o ColumnTransformer
+            categoricas = ['Categoria de geração']
+            
+            # Adicionar outras colunas numéricas, se necessário.
+            # Dados constantes não podem ser normalizados devido seu desvio ser 0.
+            # A rede aprende que os dados são constantes, não dando peso maior para tais dados.
+            numericas = ['Geração', 
+                        'Duração da Transição', 
+                        'Fase da Transição']
+            
+            # Configurar o ColumnTransformer para aplicar OneHotEncoder nas colunas categóricas e StandardScaler nas colunas numéricas
+            transf = ColumnTransformer(transformers=[
+                ('onehot', OneHotEncoder(sparse_output=False, handle_unknown='ignore'), categoricas),
+                ('scaler', StandardScaler(), numericas)],
+                                    remainder='passthrough',  # Mantém demais colunas inalteradas
+                                    verbose_feature_names_out=False  # Para nomes mais limpos
+                                    )
+            
+            # Aplicar as transformações usando o ColumnTransformer.
+            # Apenas os dados de treino são ajustados (fit) para evitar vazamento de dados, 
+            # enquanto os dados de validação e teste são transformados (transform) usando os parâmetros ajustados no treino.
+            data_tr = transf.fit_transform(x_tr)
+            data_val = transf.transform(x_val)
+            data_te = transf.transform(x_te)
 
-        # Geração dos dataframes finais (Treino, Validação e Teste) com os nomes das colunas resultantes do ColumnTransformer.
-        df_tr = pd.DataFrame(data_tr, columns=transf.get_feature_names_out())
-        df_val = pd.DataFrame(data_val, columns=transf.get_feature_names_out())
-        df_te = pd.DataFrame(data_te, columns=transf.get_feature_names_out())
+            # Geração dos dataframes finais (Treino, Validação e Teste) com os nomes das colunas resultantes do ColumnTransformer.
+            df_tr = pd.DataFrame(data_tr, columns=transf.get_feature_names_out())
+            df_val = pd.DataFrame(data_val, columns=transf.get_feature_names_out())
+            df_te = pd.DataFrame(data_te, columns=transf.get_feature_names_out())
 
-        # Dataframe com os dados de normalização para aplicação na equação da rede PGNM
-        scaler = transf.named_transformers_['scaler']
+            # Dataframe com os dados de normalização para aplicação na equação da rede PGNM
+            scaler = transf.named_transformers_['scaler']
 
-        # Posição da coluna "Geração" dentro de numericas
-        idx_pg = numericas.index('Geração')
+            # Posição da coluna "Geração" dentro de numericas
+            idx_pg = numericas.index('Geração')
 
-        df_norm = pd.DataFrame({
-            'Variável': ['Geração'],
-            'Mean': [scaler.mean_[idx_pg]],
-            'Std': [scaler.scale_[idx_pg]]
-        })
-        
-        # Salvar os dataframes em formato parquet
-        if previsao == '1':
-            dir = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados')
-        else:
-            dir = os.path.join('Usinas', usina, 'PGNM', 'Rede Neural', 'Dados')
+            df_norm = pd.DataFrame({
+                'Variável': ['Geração'],
+                'Mean': [scaler.mean_[idx_pg]],
+                'Std': [scaler.scale_[idx_pg]]
+            })
+            
+            # Salvar os dataframes em formato parquet
+            if previsao == '1':
+                dir = os.path.join('Usinas', usina, 'Minimização', pasta, 'Rede Neural', 'Dados')
+            else:
+                dir = os.path.join('Usinas', usina, 'PGNM', 'Rede Neural', 'Dados')
 
-        os.makedirs(os.path.join(dir), exist_ok=True)
-        df_tr.to_parquet(os.path.join(dir, 'Treino.parquet'), index=False)
-        df_val.to_parquet(os.path.join(dir, 'Validação.parquet'), index=False)
-        df_te.to_parquet(os.path.join(dir, 'Teste.parquet'), index=False)
-        df_norm.to_parquet(os.path.join(dir, 'Scaler Geração.parquet'), index=False)
-
+            os.makedirs(os.path.join(dir), exist_ok=True)
+            df_tr.to_parquet(os.path.join(dir, 'Treino.parquet'), index=False)
+            df_val.to_parquet(os.path.join(dir, 'Validação.parquet'), index=False)
+            df_te.to_parquet(os.path.join(dir, 'Teste.parquet'), index=False)
+            df_norm.to_parquet(os.path.join(dir, 'Scaler Geração.parquet'), index=False)
 
 def main(previsao):
     # Ler a tabela mais recente do IEMA e filtrar os dados para as usinas presentes na pasta "Usinas"
