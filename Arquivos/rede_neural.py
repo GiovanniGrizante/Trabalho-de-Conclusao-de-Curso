@@ -83,7 +83,7 @@ def criar_modelo(n_dyn, n_sta, horizon):
     model = ModeloMLP()
     return model
 
-def treinar_modelo(
+def treinar_modelo( 
     previsao,
     model,
     train_loader,
@@ -113,21 +113,8 @@ def treinar_modelo(
         Treinamento para previsao='1' (com dados sintéticos)
         """
         model = model.to(device)
-        pg_mean_t = torch.tensor(pg_mean, device=device)
-        pg_std_t = torch.tensor(pg_std, device=device)
 
-        # Parâmetros físicos treináveis
-        alpha = nn.Parameter(torch.tensor(0.1, device=device))
-        beta = nn.Parameter(torch.tensor(0.1, device=device))
-        gamma = nn.Parameter(torch.tensor(0.01, device=device))
-        omega = nn.Parameter(torch.tensor(0.05, device=device))
-        mu = nn.Parameter(torch.tensor(1e-4, device=device))
-
-        def emissao_fisica(PG):
-            emissao = alpha + beta * PG + gamma * PG**2 + omega * torch.exp(mu * PG)
-            return torch.relu(emissao)
-
-        optimizer = optim.Adam(list(model.parameters()) + [alpha, beta, gamma, omega, mu], lr=1e-3)
+        optimizer = optim.Adam(model.parameters(), lr=1e-3)
         criterion_huber = nn.HuberLoss(delta=huber_delta)
         criterion_mae = nn.L1Loss()
         criterion_mse = nn.MSELoss()
@@ -137,28 +124,22 @@ def treinar_modelo(
         patience_counter = 0
         best_model_state = None
         history = {'loss': [], 'mae': [], 'mse': [], 'val_loss': [], 'val_mae': [], 'val_mse': []}
-        idx_pg = dyn_cols.index("Geração")
 
         for epoch in range(epochs):
             model.train()
             train_loss = train_mae = train_mse = 0.0
 
-            for x_dyn, x_sta, y, anos in train_loader:
-                x_dyn, x_sta, y, anos = x_dyn.to(device), x_sta.to(device), y.to(device), anos.to(device)
+            for x_dyn, x_sta, y in train_loader:
+                x_dyn, x_sta, y = x_dyn.to(device), x_sta.to(device), y.to(device)
+                y = y.squeeze()
                 optimizer.zero_grad()
                 output = model(x_dyn, x_sta)
 
                 loss_data = criterion_huber(output, y)
                 is_transicao = x_sta[:, 0] == 1
                 weight = torch.where(is_transicao, peso_transicao, 1.0)
-                loss_data = (loss_data * weight).mean()
+                loss = (loss_data * weight).mean()  # ← APENAS loss_data
 
-                PG = x_dyn[:, idx_pg]
-                PG_real = PG * pg_std_t + pg_mean_t
-                emissao_fis = emissao_fisica(PG_real)
-                loss_fis = criterion_mse(output, emissao_fis)
-
-                loss = loss_data + lambda_fis * loss_fis
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_grad)
                 optimizer.step()
@@ -173,9 +154,12 @@ def treinar_modelo(
 
             model.eval()
             val_loss = val_mae = val_mse = 0.0
+            
+            # Validação do modelo treinado
             with torch.no_grad():
                 for x_dyn, x_sta, y in val_loader:
                     x_dyn, x_sta, y = x_dyn.to(device), x_sta.to(device), y.to(device)
+                    y = y.squeeze()
                     output = model(x_dyn, x_sta)
                     loss_val = criterion_huber(output, y).mean()
                     val_loss += loss_val.item()
@@ -342,6 +326,7 @@ def avaliar_modelo(previsao, model, test_loader):
         with torch.no_grad():
             for x_dyn, x_sta, y in test_loader:
                 x_dyn, x_sta, y = x_dyn.to(device), x_sta.to(device), y.to(device)
+                y = y.squeeze()
                 output = model(x_dyn, x_sta)
                 test_loss += criterion_mae(output, y).item()
                 test_mae += criterion_mae(output, y).item()
@@ -420,9 +405,6 @@ def main(previsao):
             Xtr_dyn, Xtr_sta, ytr = preparar_dados(df_tr, dyn_cols, static_cols, target_col, horizon)
             Xva_dyn, Xva_sta, yva = preparar_dados(df_val, dyn_cols, static_cols, target_col, horizon)
             Xte_dyn, Xte_sta, yte = preparar_dados(df_te, dyn_cols, static_cols, target_col, horizon)
-            
-            ano_tr = df_tr['Ano'].copy().reset_index(drop=True)
-            ano_tr = ano_tr.iloc[:len(Xtr_dyn)].values
 
             n_dyn = Xtr_dyn.shape[1]
             n_sta = Xtr_sta.shape[1]
@@ -431,9 +413,9 @@ def main(previsao):
             train_dataset = TensorDataset(
                 torch.FloatTensor(Xtr_dyn),
                 torch.FloatTensor(Xtr_sta),
-                torch.FloatTensor(ytr),
-                torch.LongTensor(ano_tr.astype(np.int64))
+                torch.FloatTensor(ytr)
             )
+            
             val_dataset = TensorDataset(
                 torch.FloatTensor(Xva_dyn),
                 torch.FloatTensor(Xva_sta),

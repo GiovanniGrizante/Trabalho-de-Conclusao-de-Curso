@@ -1,5 +1,5 @@
 import tabulate as tab
-import os, time, sys
+import os, time
 
 from Arquivos import iema, ons, armazenar, ampl, sinteticas
 from Arquivos import tratamento_rede, rede_neural
@@ -12,7 +12,7 @@ def gerar_tabela(previsao):
             ['Etapa 1', 'iema.py\nons.py\narmazenar.py', 'Processa os dados ONS e IEMA.'],
             ['Etapa 2', 'ampl.py', 'Encontra os coeficientes\n(Executar o arquivo p/ multiprocessamento).'],
             ['Etapa 3', 'sinteticas.py\ntratamento_rede.py', 'Gera as emissões sintéticas e trata os dados.'],
-            ['Etapa 4', 'rede_neural.py', 'Treina o modelo de rede neural (GRU + Dense).'],
+            ['Etapa 4', 'rede_neural.py', 'Treina o modelo de rede neural.'],
             ['Etapa 5', 'graficos.py', 'Gera os resultados gerais e por usina da RN.'],
             ['Etapa 6', 'previsao.py', 'Executa o modelo para previsão de emissões']
         ]
@@ -20,7 +20,7 @@ def gerar_tabela(previsao):
         conteudo = [
             ['Etapa 1', 'iema.py\nons.py\narmazenar.py', 'Processa os dados ONS e IEMA.'],
             ['Etapa 2', 'tratamento_rede.py', 'Trata os dados para a RN.'],
-            ['Etapa 3', 'rede_neural.py', 'Treina o modelo de rede neural (GRU + Dense).'],
+            ['Etapa 3', 'rede_neural.py', 'Treina o modelo de rede neural.'],
             ['Etapa 4', 'graficos.py', 'Gera os resultados gerais e por usina da RN.'],
             ['Etapa 5', 'previsao.py', 'Executa o modelo para previsão de emissões']
         ]
@@ -34,9 +34,9 @@ def gerar_tabela(previsao):
 def executar_etapas(previsao):
     # Execução da etapa 1 (Arquivos que dependem de outros arquivos)
     def etapa1():
-        iema = iema.main()
-        ons_resultado = ons.main(iema)
-        armazenar.main(iema, ons_resultado)
+        iema_resultado = iema.main()
+        ons_resultado = ons.main(iema_resultado)
+        armazenar.main(iema_resultado, ons_resultado)
         
     etapas = {
         1: [etapa1]
@@ -77,7 +77,6 @@ def perguntar_etapas(previsao, etapas):
             time.sleep(4)
     
 if __name__ == '__main__':
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
     while True:
         os.system('cls')
         previsao = input('Qual método de previsão? (1 - Minimização | 2 - RN Híbrida): ')
