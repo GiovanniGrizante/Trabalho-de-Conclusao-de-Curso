@@ -4,14 +4,37 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import os, time
 
-def plotar_geracao_emissao(usina):
+def configs(msg, intervalo):
+    while True:
+        os.system('cls')
+        resp = int(input(msg))
+        if resp in intervalo:
+            return resp
+        print('Opção inválida!')
+        time.sleep(3)
+
+
+def plotar_geracao_emissao(usina, previsao='1', modo='Padrão'):
     """
     Gera grafico com dois eixos Y: Geracao e Emissao
     Eixo X: Tempo (Indice com marcacao de Ano)
+    
+    Parâmetros:
+        usina: nome da usina
+        previsao: '1' para minimização, '2' para PINN
+        modo: 'Padrão', 'Regressão L2' ou 'PGNM'
     """
+    # Define o caminho base conforme previsao
+    if previsao == '1':
+        tipo_analise_path = 'Minimização'
+        # Para previsao='1', modo pode ser 'Padrão' ou 'Regressão L2'
+        caminho_emissao = os.path.join('Usinas', usina, tipo_analise_path, modo, 'Emissões', 'Horárias.parquet')
+    else:  # previsao == '2'
+        tipo_analise_path = 'PGNM'
+        caminho_emissao = os.path.join('Usinas', usina, tipo_analise_path, 'Emissões', 'Horárias.parquet')
+    
     # Caminhos dos arquivos
     caminho_geracao = os.path.join('Usinas', usina, 'Dados Externos', 'ONS.parquet')
-    caminho_emissao = os.path.join('Usinas', usina, 'Minimização', 'Emissões', 'Horárias.parquet')
     
     # Carregar dados
     df_geracao = pd.read_parquet(caminho_geracao)
@@ -39,7 +62,10 @@ def plotar_geracao_emissao(usina):
     anos_unicos = sorted(df_merged[col_ano].unique())
     
     # Criar pasta para salvar graficos
-    pasta_usina = os.path.join('Usinas', usina, 'Minimização', 'Gráficos', 'Geração X Emissão')
+    if previsao == '1':
+        pasta_usina = os.path.join('Usinas', usina, tipo_analise_path, modo, 'Gráficos', 'Geração X Emissão')
+    else:
+        pasta_usina = os.path.join('Usinas', usina, tipo_analise_path, 'Gráficos', 'Geração X Emissão')
     os.makedirs(pasta_usina, exist_ok=True)
     
     # Gerar um grafico para cada ano
@@ -70,7 +96,8 @@ def plotar_geracao_emissao(usina):
         ax2.tick_params(axis='y', labelcolor=cor_emissao)
         
         # Titulo
-        plt.title(f'Geração e Emissão - {usina} - {ano}', fontsize=14)
+        modo_str = f" - {modo}" if previsao == '1' else ""
+        plt.title(f'Geração e Emissão - {usina}{modo_str} - {ano}', fontsize=14)
         
         # Legenda manual
         legend_elements = [
@@ -81,10 +108,11 @@ def plotar_geracao_emissao(usina):
         
         plt.tight_layout()
         
-        # Salvar grafico
-        nome_arquivo = f'{ano}.png'
-        plt.savefig(os.path.join(pasta_usina, nome_arquivo), dpi=150, bbox_inches='tight')
+        # Salvar grafico em SVG
+        nome_arquivo = f'{ano}.svg'
+        plt.savefig(os.path.join(pasta_usina, nome_arquivo), format='svg', bbox_inches='tight')
         plt.close()
+
 
 def plotar_gerais(resultados_df, graphs, ext):
     
@@ -109,8 +137,8 @@ def plotar_gerais(resultados_df, graphs, ext):
         graphs.grid(True, alpha=0.3)
         
         if graphs == plt:
-            os.makedirs(os.path.join(path, f'{ext[1:].upper()}'),exist_ok=True)
-            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Histograma MAE{ext}'), dpi=300, bbox_inches='tight')
+            os.makedirs(os.path.join(path, f'{ext[1:].upper()}'), exist_ok=True)
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Histograma MAE{ext}'), format='svg', bbox_inches='tight')
             plt.close()
         
     def dispersao(resultados_df, graphs, ext, path):
@@ -142,7 +170,7 @@ def plotar_gerais(resultados_df, graphs, ext):
         graphs.tight_layout()
         
         if graphs == plt:
-            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Dispersão{ext}'), dpi=300, bbox_inches='tight')
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Dispersão{ext}'), format='svg', bbox_inches='tight')
             plt.close()
     
     def mae_mse(resultados_df, graphs, ext, path):
@@ -161,7 +189,7 @@ def plotar_gerais(resultados_df, graphs, ext):
         graphs.tight_layout()
         
         if graphs == plt:
-            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'MAE x MSE{ext}'), dpi=300, bbox_inches='tight')
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'MAE x MSE{ext}'), format='svg', bbox_inches='tight')
             plt.close()
     
     def melhores(resultados_df, graphs, ext, path):
@@ -190,7 +218,7 @@ def plotar_gerais(resultados_df, graphs, ext):
         graphs.tight_layout()
         
         if graphs == plt:
-            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'10 Melhores Desempenhos{ext}'), dpi=300, bbox_inches='tight')
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'10 Melhores Desempenhos{ext}'), format='svg', bbox_inches='tight')
             plt.close()
     
     def piores(resultados_df, graphs, ext, path):
@@ -220,7 +248,7 @@ def plotar_gerais(resultados_df, graphs, ext):
         graphs.tight_layout()
         
         if graphs == plt:
-            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'10 Piores Desempenhos{ext}'), dpi=300, bbox_inches='tight')
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'10 Piores Desempenhos{ext}'), format='svg', bbox_inches='tight')
             plt.close()
     
     def resumo(resultados_df, graphs, ext, path):
@@ -289,12 +317,9 @@ def plotar_gerais(resultados_df, graphs, ext):
                     cell.set_facecolor('#F8CECC')
                     cell.set_text_props(weight='bold')
             
-            # ax.set_title('Resumo Estatístico - Análise de Emissões (tCO2/h)', 
-            #             fontsize=14, weight='bold', pad=20)
-            
             plt.tight_layout()
             plt.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Resumo Estatístico{ext}'), 
-                    dpi=300, bbox_inches='tight')
+                    format='svg', bbox_inches='tight')
             plt.close()
             
         else:
@@ -331,9 +356,6 @@ def plotar_gerais(resultados_df, graphs, ext):
                 elif dados_tabela[i-1][0].startswith('⚠️'):
                     cell.set_facecolor('#F8CECC')
                     cell.set_text_props(weight='bold')
-            
-            # Título menor para subplot
-            #graphs.set_title('Resumo Estatístico', fontsize=10, weight='bold')
     
     # ========== EXECUÇÃO PRINCIPAL ==========
     
@@ -369,8 +391,9 @@ def plotar_gerais(resultados_df, graphs, ext):
         # Ajusta e salva a figura completa
         plt.suptitle('Resultados do Modelo - Análise de Emissões (tCO2/h)', fontsize=16)
         plt.tight_layout()
-        plt.savefig(os.path.join(path, f'Gerais{ext}'), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(path, f'Gerais{ext}'), format='svg', bbox_inches='tight')
         plt.close()
+
 
 def plotar_instabilidade_geral(resultados_df, graphs, ext):
     
@@ -390,7 +413,7 @@ def plotar_instabilidade_geral(resultados_df, graphs, ext):
             graphs.title('Distribuição da Instabilidade')
             graphs.legend()
             graphs.grid(True, alpha=0.3)
-            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Distribuição de Instabilidade{ext}'), dpi=300, bbox_inches='tight')
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Distribuição de Instabilidade{ext}'), format='svg', bbox_inches='tight')
             plt.close()
             
         else:
@@ -425,7 +448,7 @@ def plotar_instabilidade_geral(resultados_df, graphs, ext):
             graphs.ylabel('Razao MSE/MAE²')
             graphs.title('Instabilidade por Categoria')
             graphs.grid(True, alpha=0.3, axis='y')
-            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Instabilidade por Categoria{ext}'), dpi=300, bbox_inches='tight')
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'Instabilidade por Categoria{ext}'), format='svg', bbox_inches='tight')
             plt.close()
         
         else:
@@ -455,7 +478,7 @@ def plotar_instabilidade_geral(resultados_df, graphs, ext):
             graphs.yscale('log')
             graphs.legend()
             graphs.grid(True, alpha=0.3)
-            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'MAE x Instabilidade{ext}'), dpi=300, bbox_inches='tight')
+            graphs.savefig(os.path.join(path, f'{ext[1:].upper()}', f'MAE x Instabilidade{ext}'), format='svg', bbox_inches='tight')
             plt.close()
         
         else:
@@ -499,20 +522,28 @@ def plotar_instabilidade_geral(resultados_df, graphs, ext):
         # Ajusta e salva a figura completa
         plt.suptitle('Análise Geral da Instabilidade dos Modelos', fontsize=16)
         plt.tight_layout()
-        plt.savefig(os.path.join(path, f'Gerais{ext}'), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(path, f'Gerais{ext}'), format='svg', bbox_inches='tight')
         plt.close()
     
     return df_analise
 
-def plotar_analise_usina(resultados_df, usina_alvo):
+
+def plotar_analise_usina(resultados_df, usina_alvo, previsao='1', modo='Padrão'):
     """
     Analise detalhada de instabilidade para uma usina especifica
-    Salva o grafico em: Usinas/[usina]/Minimização/Graficos/Instabilidade.png
+    Salva o grafico em: Usinas/[usina]/[tipo_analise]/[modo]/Graficos/Instabilidade.png
     """
     if usina_alvo not in resultados_df['usina'].values:
         return
     
-    row = resultados_df[resultados_df['usina'] == usina_alvo].iloc[0]
+    # Filtra apenas os dados do modo específico
+    df_filtrado = resultados_df[(resultados_df['usina'] == usina_alvo) & 
+                                 (resultados_df['modo_analise'] == modo)]
+    
+    if len(df_filtrado) == 0:
+        return
+    
+    row = df_filtrado.iloc[0]
     mae = row['mae']
     mse = row['mse']
     razao = mse / (mae ** 2) if mae > 0 else 0
@@ -564,8 +595,8 @@ RECOMENDAÇÃO:
                  verticalalignment='top', fontfamily='monospace',
                  bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
-    # 2. Grafico comparativo com outras usinas
-    df_comp = resultados_df.copy()
+    # 2. Grafico comparativo com outras usinas (filtrado pelo mesmo modo)
+    df_comp = resultados_df[resultados_df['modo_analise'] == modo].copy()
     df_comp['razao'] = df_comp['mse'] / (df_comp['mae'] ** 2)
     
     cores = ['steelblue' if u != usina_alvo else cor_status for u in df_comp['usina']]
@@ -576,29 +607,44 @@ RECOMENDAÇÃO:
     axes[1].axhline(y=3, color='orange', linestyle='--', linewidth=1, label='Limiar atenção (3)')
     axes[1].set_xlabel('MAE (tCO2/h)')
     axes[1].set_ylabel('Razão MSE/MAE²')
-    axes[1].set_title(f'Posição da Usina no Contexto Geral')
+    axes[1].set_title(f'Posição da Usina no Contexto Geral ({modo})')
     axes[1].set_xscale('log')
     axes[1].set_yscale('log')
     axes[1].legend()
     axes[1].grid(True, alpha=0.3)
     
-    plt.suptitle(f'Análise de Instabilidade - {usina_alvo}', fontsize=14)
+    modo_str = f" - {modo}" if previsao == '1' else ""
+    plt.suptitle(f'Análise de Instabilidade - {usina_alvo}{modo_str}', fontsize=14)
     plt.tight_layout()
     
-    # Salvar na pasta da usina em Usinas/[usina]/Graficos/
-    pasta_usina = os.path.join('Usinas', usina_alvo, 'Minimização', 'Gráficos')
+    # Salvar na pasta da usina
+    if previsao == '1':
+        tipo_analise_path = 'Minimização'
+        pasta_usina = os.path.join('Usinas', usina_alvo, tipo_analise_path, modo, 'Gráficos')
+    else:
+        tipo_analise_path = 'PGNM'
+        pasta_usina = os.path.join('Usinas', usina_alvo, tipo_analise_path, 'Gráficos')
     os.makedirs(pasta_usina, exist_ok=True)
-    plt.savefig(os.path.join(pasta_usina, 'Instabilidade.png'), dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(pasta_usina, 'Instabilidade.svg'), format='svg', bbox_inches='tight')
     plt.close()
 
-def plotar_erro_temporal(usina):
+
+def plotar_erro_temporal(usina, previsao='1', modo='Padrão'):
     """
     Analisa erro temporal de uma usina específica
-    Salva gráficos na pasta da usina: Usinas/[usina]/Graficos/
+    Salva gráficos na pasta da usina: Usinas/[usina]/[tipo_analise]/[modo]/Graficos/
     """
+    # Define o caminho base conforme previsao
+    if previsao == '1':
+        tipo_analise_path = 'Minimização'
+        caminho_base = os.path.join('Usinas', usina, tipo_analise_path, modo, 'Rede Neural')
+    else:
+        tipo_analise_path = 'PGNM'
+        caminho_base = os.path.join('Usinas', usina, tipo_analise_path, 'Rede Neural')
+    
     # Caminhos
-    caminho_predicoes = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Historicos', 'Predições.parquet')
-    caminho_dados = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Dados', 'Teste.parquet')
+    caminho_predicoes = os.path.join(caminho_base, 'Historicos', 'Predições.parquet')
+    caminho_dados = os.path.join(caminho_base, 'Dados', 'Teste.parquet')
     
     if not os.path.exists(caminho_predicoes):
         return None
@@ -606,7 +652,7 @@ def plotar_erro_temporal(usina):
     # Carregar predições
     df_pred = pd.read_parquet(caminho_predicoes)
     
-    # Carregar dados originais para obter informações adicionais (categoria, geração, etc.)
+    # Carregar dados originais
     df_dados = pd.read_parquet(caminho_dados) if os.path.exists(caminho_dados) else None
     
     y_true = df_pred['y_true'].values
@@ -709,68 +755,420 @@ def plotar_erro_temporal(usina):
     # Título principal com métricas
     classificacao = "Extrema" if razao_global > 10 else ("Alta" if razao_global > 5 else ("Moderada" if razao_global > 3 else "Estável"))
     
-    plt.suptitle(f'{usina} | MAE: {mae_global:.2f} | MSE/MAE²: {razao_global:.2f} | Classificação: {classificacao}', 
+    modo_str = f" - {modo}" if previsao == '1' else ""
+    plt.suptitle(f'{usina}{modo_str} | MAE: {mae_global:.2f} | MSE/MAE²: {razao_global:.2f} | Classificação: {classificacao}', 
                  fontsize=14, fontweight='bold')
     
     plt.tight_layout()
     
     # Salvar gráfico na pasta da usina
-    pasta_usina = os.path.join('Usinas', usina, 'Minimização', 'Gráficos')
+    if previsao == '1':
+        pasta_usina = os.path.join('Usinas', usina, tipo_analise_path, modo, 'Gráficos')
+    else:
+        pasta_usina = os.path.join('Usinas', usina, tipo_analise_path, 'Gráficos')
     os.makedirs(pasta_usina, exist_ok=True)
-    plt.savefig(os.path.join(pasta_usina, 'Erro Temporal.png'), dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(pasta_usina, 'Erro Temporal.svg'), format='svg', bbox_inches='tight')
     plt.close()
 
-def configs(msg, intervalo):
-    while True:
-        os.system('cls')
-        resp = int(input(msg))
-        if resp in intervalo:
-            return resp
-        print('Opção inválida!')
-        time.sleep(3)
 
-def main():
-    graphs = configs('Gráficos individuais ou unificados?\n(1 - Individuais | 2 - Unificados): ', [1, 2])
+def plotar_comparativo_emissoes_calculadas(usina):
+    """
+    Gera um gráfico comparativo entre os métodos 'Padrão' e 'Regressão L2'
+    usando os dados de emissões calculadas (Horárias.parquet)
+    Mostra as emissões ao longo do tempo para ambos os métodos
+    Salva o gráfico em: Usinas/[usina]/Minimização/Gráficos/Comparativo_Emissoes_Padrao_vs_L2.svg
+    """
     
-    ext = configs('Qual o tipo de gráfico?\n(1 - PNG | 2 - SVG): ', [1, 2])
-    ext_dict = {1: '.png', 2: '.svg'}
-    ext = ext_dict[ext]
+    # Caminhos para os arquivos de emissões calculadas
+    caminhos = {
+        'Padrão': os.path.join('Usinas', usina, 'Minimização', 'Padrão', 'Emissões', 'Horárias.parquet'),
+        'Regressão L2': os.path.join('Usinas', usina, 'Minimização', 'Regressão L2', 'Emissões', 'Horárias.parquet')
+    }
     
-    resultados = []
+    # Carregar dados de cada método
+    dados = {}
+    anos_disponiveis = {}
+    
+    for metodo, caminho in caminhos.items():
+        if os.path.exists(caminho):
+            df = pd.read_parquet(caminho)
+            # Verificar se tem a coluna 'Emissão'
+            if 'Emissão' in df.columns:
+                dados[metodo] = df['Emissão'].values
+                # Tentar extrair informações de ano se disponível
+                if 'Ano' in df.columns:
+                    anos_disponiveis[metodo] = df['Ano'].values
+            else:
+                print(f"  ⚠️ {metodo}: coluna 'Emissão' não encontrada")
+    
+    if len(dados) < 2:
+        print(f"  ⚠️ Usina {usina}: dados insuficientes para comparação")
+        return None
+    
+    # Garantir que os arrays tenham o mesmo tamanho
+    min_len = min(len(dados['Padrão']), len(dados['Regressão L2']))
+    y_padrao = dados['Padrão'][:min_len]
+    y_l2 = dados['Regressão L2'][:min_len]
+    
+    # Calcular diferença
+    diferenca = y_padrao - y_l2
+    
+    # Calcular estatísticas
+    mae_diferenca = np.mean(np.abs(diferenca))
+    correlacao = np.corrcoef(y_padrao, y_l2)[0, 1]
+    
+    # Criar figura com 3 subplots
+    fig, axes = plt.subplots(3, 1, figsize=(15, 12))
+    
+    # 1. Série temporal: Emissões Calculadas - Comparação
+    n_mostrar = min(1000, min_len)
+    axes[0].plot(y_padrao[:n_mostrar], color='#2E86AB', linewidth=1, alpha=0.8, label='Padrão')
+    axes[0].plot(y_l2[:n_mostrar], color='#E15554', linewidth=1, alpha=0.8, label='Regressão L2')
+    axes[0].set_ylabel('Emissões (tCO2/h)')
+    axes[0].set_title(f'Comparação de Emissões Calculadas - {usina} (primeiras {n_mostrar} horas)')
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+    
+    # 2. Diferença entre os métodos
+    axes[1].plot(diferenca[:n_mostrar], color='purple', linewidth=1, alpha=0.7)
+    axes[1].axhline(y=0, color='black', linestyle='--', linewidth=0.8)
+    axes[1].fill_between(range(n_mostrar), 0, diferenca[:n_mostrar], 
+                         where=(diferenca[:n_mostrar] > 0), color='green', alpha=0.3, 
+                         label='Padrão > L2')
+    axes[1].fill_between(range(n_mostrar), diferenca[:n_mostrar], 0, 
+                         where=(diferenca[:n_mostrar] < 0), color='red', alpha=0.3, 
+                         label='L2 > Padrão')
+    axes[1].set_ylabel('Diferença (Padrão - L2)')
+    axes[1].set_title('Diferença entre Métodos (positivo = Padrão superestima)')
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+    
+    # 3. Dispersão: Padrão vs L2
+    axes[2].scatter(y_padrao, y_l2, alpha=0.3, s=10, c='steelblue')
+    
+    # Linha de referência y=x (igualdade perfeita)
+    min_val = min(y_padrao.min(), y_l2.min())
+    max_val = max(y_padrao.max(), y_l2.max())
+    axes[2].plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=1.5, 
+                 label='Igualdade perfeita')
+    
+    axes[2].set_xlabel('Emissões - Método Padrão (tCO2/h)')
+    axes[2].set_ylabel('Emissões - Regressão L2 (tCO2/h)')
+    axes[2].set_title(f'Dispersão: Padrão vs L2 (correlação: {correlacao:.4f})')
+    axes[2].legend()
+    axes[2].grid(True, alpha=0.3)
+    
+    # Estatísticas gerais
+    mae_padrao = np.mean(np.abs(y_padrao))
+    mae_l2 = np.mean(np.abs(y_l2))
+    
+    plt.suptitle(f'Comparativo de Emissões Calculadas: Padrão vs Regressão L2\n'
+                 f'MAE Padrão: {mae_padrao:.2f} | MAE L2: {mae_l2:.2f} | '
+                 f'Diferença média absoluta: {mae_diferenca:.2f} | Correlação: {correlacao:.4f}',
+                 fontsize=12, fontweight='bold')
+    
+    plt.tight_layout()
+    
+    # Salvar gráfico
+    pasta_destino = os.path.join('Usinas', usina, 'Minimização', 'Gráficos')
+    os.makedirs(pasta_destino, exist_ok=True)
+    plt.savefig(os.path.join(pasta_destino, 'Comparativo_Emissoes_Padrao_vs_L2.svg'), 
+                format='svg', bbox_inches='tight')
+    plt.close()
+    
+    # Retornar estatísticas
+    return {
+        'usina': usina,
+        'mae_padrao': mae_padrao,
+        'mae_l2': mae_l2,
+        'diferenca_media': np.mean(diferenca),
+        'diferenca_mediana': np.median(diferenca),
+        'diferenca_std': np.std(diferenca),
+        'correlacao': correlacao,
+        'mae_diferenca': mae_diferenca
+    }
+
+
+def plotar_comparativo_todas_usinas_emissoes():
+    """
+    Gera gráficos comparativos de emissões calculadas para todas as usinas 
+    que possuem ambos os métodos (Padrão e Regressão L2)
+    """
+    resultados_comparacao = []
     
     for usina in os.listdir('Usinas'):
-        caminho_teste = os.path.join('Usinas', usina, 'Minimização', 'Rede Neural', 'Históricos', 'Teste.parquet')
+        # Verificar se a usina tem ambos os métodos
+        caminho_padrao = os.path.join('Usinas', usina, 'Minimização', 'Padrão', 'Emissões', 'Horárias.parquet')
+        caminho_l2 = os.path.join('Usinas', usina, 'Minimização', 'Regressão L2', 'Emissões', 'Horárias.parquet')
         
-        if os.path.exists(caminho_teste):
-            df_teste = pd.read_parquet(caminho_teste)
-            resultados.append(df_teste)
+        if os.path.exists(caminho_padrao) and os.path.exists(caminho_l2):
+            resultado = plotar_comparativo_emissoes_calculadas(usina)
+            if resultado:
+                resultados_comparacao.append(resultado)
+    
+    # Salvar resumo da comparação
+    if resultados_comparacao:
+        df_resumo = pd.DataFrame(resultados_comparacao)
+        pasta_destino = os.path.join('Resultados', 'previsao_1', 'Comparativos_Emissoes')
+        os.makedirs(pasta_destino, exist_ok=True)
+        df_resumo.to_csv(os.path.join(pasta_destino, 'Resumo_Comparativo_Emissoes_Padrao_vs_L2.csv'), 
+                        index=False)
+        
+        # Criar gráfico de barras comparativo (MAE)
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Gráfico 1: MAE Padrão vs L2
+        x = np.arange(len(df_resumo['usina']))
+        width = 0.35
+        
+        axes[0].bar(x - width/2, df_resumo['mae_padrao'], width, label='Padrão', 
+                    color='#2E86AB', alpha=0.7)
+        axes[0].bar(x + width/2, df_resumo['mae_l2'], width, label='Regressão L2', 
+                    color='#E15554', alpha=0.7)
+        axes[0].set_xlabel('Usinas')
+        axes[0].set_ylabel('MAE (tCO2/h)')
+        axes[0].set_title('MAE das Emissões: Padrão vs Regressão L2')
+        axes[0].set_xticks(x)
+        axes[0].set_xticklabels(df_resumo['usina'], rotation=45, ha='right', fontsize=8)
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3, axis='y')
+        
+        # Gráfico 2: Correlação entre métodos
+        cores = ['green' if c > 0.95 else 'orange' if c > 0.9 else 'red' for c in df_resumo['correlacao']]
+        axes[1].barh(df_resumo['usina'], df_resumo['correlacao'], color=cores, alpha=0.7)
+        axes[1].axvline(x=0.95, color='green', linestyle='--', linewidth=1, label='Excelente (0.95)')
+        axes[1].axvline(x=0.90, color='orange', linestyle='--', linewidth=1, label='Bom (0.90)')
+        axes[1].set_xlabel('Correlação')
+        axes[1].set_title('Correlação entre Métodos Padrão e L2')
+        axes[1].legend(loc='lower right')
+        axes[1].grid(True, alpha=0.3, axis='x')
+        
+        plt.suptitle('Comparação Geral: Padrão vs Regressão L2', fontsize=14, fontweight='bold')
+        plt.tight_layout()
+        plt.savefig(os.path.join(pasta_destino, 'Resumo_MAE_Correlacao_Padrao_vs_L2.svg'), 
+                    format='svg', bbox_inches='tight')
+        plt.close()
+        
+    return resultados_comparacao
+
+
+def plotar_comparativo_regressao_RN(usina):
+    """
+    Gera um gráfico comparativo entre os métodos 'Padrão' e 'Regressão L2'
+    Mostra as emissões previstas por ambos os métodos ao longo do tempo
+    Salva o gráfico em: Usinas/[usina]/Minimização/Gráficos/Comparativo_Padrao_vs_L2.svg
+    """
+    
+    # Caminhos para os dois métodos
+    caminhos = {
+        'Padrão': os.path.join('Usinas', usina, 'Minimização', 'Padrão', 'Rede Neural', 'Historicos', 'Predições.parquet'),
+        'Regressão L2': os.path.join('Usinas', usina, 'Minimização', 'Regressão L2', 'Rede Neural', 'Historicos', 'Predições.parquet')
+    }
+    
+    # Carregar dados de cada método
+    dados = {}
+    for metodo, caminho in caminhos.items():
+        if os.path.exists(caminho):
+            df = pd.read_parquet(caminho)
+            # Verificar se tem a coluna correta
+            if 'y_pred' in df.columns:
+                dados[metodo] = df['y_pred'].values
+            elif 'Emissões Previstas' in df.columns:
+                dados[metodo] = df['Emissões Previstas'].values
+            else:
+                # Tentar encontrar qualquer coluna numérica
+                num_cols = df.select_dtypes(include=[np.number]).columns
+                if len(num_cols) > 0:
+                    dados[metodo] = df[num_cols[0]].values
+                else:
+                    print(f"  ⚠️ {metodo}: nenhuma coluna numérica encontrada")
+    
+    if len(dados) < 2:
+        print(f"  ⚠️ Usina {usina}: dados insuficientes para comparação (Padrão: {'✓' if 'Padrão' in dados else '✗'}, L2: {'✓' if 'Regressão L2' in dados else '✗'})")
+        return
+    
+    # Garantir que os arrays tenham o mesmo tamanho
+    min_len = min(len(dados['Padrão']), len(dados['Regressão L2']))
+    y_padrao = dados['Padrão'][:min_len]
+    y_l2 = dados['Regressão L2'][:min_len]
+    
+    # Calcular diferença
+    diferenca = y_padrao - y_l2
+    
+    # Criar figura com 3 subplots
+    fig, axes = plt.subplots(3, 1, figsize=(15, 12))
+    
+    # 1. Série temporal: Emissões Previstas - Método Padrão
+    axes[0].plot(y_padrao[:1000], color='#2E86AB', linewidth=1, alpha=0.8, label='Padrão')
+    axes[0].plot(y_l2[:1000], color='#E15554', linewidth=1, alpha=0.8, label='Regressão L2')
+    axes[0].set_ylabel('Emissões (tCO2/h)')
+    axes[0].set_title(f'Comparação de Previsões - {usina} (primeiras 1000 horas)')
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+    
+    # 2. Diferença entre os métodos
+    axes[1].plot(diferenca[:1000], color='purple', linewidth=1, alpha=0.7)
+    axes[1].axhline(y=0, color='black', linestyle='--', linewidth=0.8)
+    axes[1].fill_between(range(1000), 0, diferenca[:1000], 
+                         where=(diferenca[:1000] > 0), color='green', alpha=0.3, label='Padrão > L2')
+    axes[1].fill_between(range(1000), diferenca[:1000], 0, 
+                         where=(diferenca[:1000] < 0), color='red', alpha=0.3, label='L2 > Padrão')
+    axes[1].set_ylabel('Diferença (Padrão - L2)')
+    axes[1].set_title('Diferença entre Métodos (positivo = Padrão superestima)')
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+    
+    # 3. Estatísticas da diferença (histograma)
+    axes[2].hist(diferenca, bins=50, edgecolor='black', alpha=0.7, color='steelblue')
+    axes[2].axvline(x=0, color='black', linestyle='--', linewidth=1.5, label='Diferença zero')
+    axes[2].axvline(x=np.mean(diferenca), color='red', linestyle='--', 
+                    label=f'Média: {np.mean(diferenca):.2f}')
+    axes[2].axvline(x=np.median(diferenca), color='green', linestyle='--', 
+                    label=f'Mediana: {np.median(diferenca):.2f}')
+    axes[2].set_xlabel('Diferença (Padrão - L2)')
+    axes[2].set_ylabel('Frequência')
+    axes[2].set_title('Distribuição das Diferenças')
+    axes[2].legend()
+    axes[2].grid(True, alpha=0.3)
+    
+    # Estatísticas gerais
+    mae_padrao = np.mean(np.abs(y_padrao))
+    mae_l2 = np.mean(np.abs(y_l2))
+    mae_diferenca = np.mean(np.abs(diferenca))
+    
+    plt.suptitle(f'Comparativo: Padrão vs Regressão L2\n'
+                 f'MAE Padrão: {mae_padrao:.2f} | MAE L2: {mae_l2:.2f} | '
+                 f'Diferença média absoluta: {mae_diferenca:.2f}',
+                 fontsize=12, fontweight='bold')
+    
+    plt.tight_layout()
+    
+    # Salvar gráfico
+    pasta_destino = os.path.join('Usinas', usina, 'Minimização', 'Gráficos')
+    os.makedirs(pasta_destino, exist_ok=True)
+    plt.savefig(os.path.join(pasta_destino, 'Comparativo_Padrao_vs_L2.svg'), 
+                format='svg', bbox_inches='tight')
+    plt.close()
+    
+    # Retornar estatísticas para possível uso
+    return {
+        'usina': usina,
+        'mae_padrao': mae_padrao,
+        'mae_l2': mae_l2,
+        'diferenca_media': np.mean(diferenca),
+        'diferenca_mediana': np.median(diferenca),
+        'diferenca_std': np.std(diferenca)
+    }
+
+
+def plotar_comparativo_todas_usinas_RN():
+    """
+    Gera gráficos comparativos para todas as usinas que possuem ambos os métodos
+    """
+    resultados_comparacao = []
+    
+    for usina in os.listdir('Usinas'):
+        # Verificar se a usina tem ambos os métodos
+        caminho_padrao = os.path.join('Usinas', usina, 'Minimização', 'Padrão', 'Rede Neural', 'Historicos', 'Predições.parquet')
+        caminho_l2 = os.path.join('Usinas', usina, 'Minimização', 'Regressão L2', 'Rede Neural', 'Historicos', 'Predições.parquet')
+        
+        if os.path.exists(caminho_padrao) and os.path.exists(caminho_l2):
+            resultado = plotar_comparativo_regressao_RN(usina)
+            if resultado:
+                resultados_comparacao.append(resultado)
+    
+    # Salvar resumo da comparação
+    if resultados_comparacao:
+        df_resumo = pd.DataFrame(resultados_comparacao)
+        pasta_destino = os.path.join('Resultados', 'previsao_1', 'Comparativos')
+        os.makedirs(pasta_destino, exist_ok=True)
+        df_resumo.to_csv(os.path.join(pasta_destino, 'Resumo_Comparativo_Padrao_vs_L2.csv'), index=False)
+        
+        # Criar gráfico de barras comparativo
+        fig, ax = plt.subplots(figsize=(12, 6))
+        x = np.arange(len(df_resumo['usina']))
+        width = 0.35
+        
+        ax.bar(x - width/2, df_resumo['mae_padrao'], width, label='Padrão', color='#2E86AB', alpha=0.7)
+        ax.bar(x + width/2, df_resumo['mae_l2'], width, label='Regressão L2', color='#E15554', alpha=0.7)
+        
+        ax.set_xlabel('Usinas')
+        ax.set_ylabel('MAE (tCO2/h)')
+        ax.set_title('Comparação de MAE: Padrão vs Regressão L2')
+        ax.set_xticks(x)
+        ax.set_xticklabels(df_resumo['usina'], rotation=45, ha='right', fontsize=8)
+        ax.legend()
+        ax.grid(True, alpha=0.3, axis='y')
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(pasta_destino, 'Resumo_MAE_Padrao_vs_L2.svg'), 
+                    format='svg', bbox_inches='tight')
+        plt.close()
+    
+    return resultados_comparacao
+
+
+def main(previsao):
+    graphs = configs('Gráficos individuais ou unificados?\n(1 - Individuais | 2 - Unificados): ', [1, 2])
+    
+    ext = '.svg'  # Forçando SVG
+    
+    # =========================================================
+    # DEFINIÇÃO DAS PASTAS BASEADO EM 'previsao'
+    # =========================================================
+    if previsao == '1':  # Modo Minimização
+        modos_analise = ['Padrão', 'Regressão L2']
+        tipo_analise_path = 'Minimização'
+    else:  # previsao == '2' - Modo Híbrido (PGNM)
+        modos_analise = ['PGNM']
+        tipo_analise_path = 'PGNM'
+
+    resultados = []
+    
+    # Loop principal para cada usina e modo
+    for usina in os.listdir('Usinas'):
+        for modo in modos_analise:
+            caminho_teste = os.path.join('Usinas', usina, tipo_analise_path, modo, 'Rede Neural', 'Históricos', 'Teste.parquet')
+            
+            if os.path.exists(caminho_teste):
+                df_teste = pd.read_parquet(caminho_teste)
+                df_teste['modo_analise'] = modo
+                df_teste['previsao'] = previsao
+                resultados.append(df_teste)
     
     if not resultados:
-        print('Sem dados disponíveis para geração dos gráficos.')
+        print(f'Sem dados disponíveis para geração dos gráficos com a previsão {previsao}.')
         return
     
     df_resultados = pd.concat(resultados, ignore_index=True)
     
-    df_geral = pd.DataFrame([
-        ['Total de usinas', len(df_resultados)],
-        ['MAE medio', f"{df_resultados['mae'].mean():.2f} ± {df_resultados['mae'].std():.2f}"],
-        ['MAE mediano', f"{df_resultados['mae'].median():.2f}"],
-        ['MAE minimo', f"{df_resultados['mae'].min():.6f}"],
-        ['MAE maximo', f"{df_resultados['mae'].max():.2f}"],
-        ['MSE medio', f"{df_resultados['mse'].mean():.2f}"]
-    ], columns=['Estatistica', 'Valor'])
+    # --- Geração dos DataFrames e Gráficos Gerais ---
+    save_path = os.path.join('Resultados', f'previsao_{previsao}')
+    os.makedirs(os.path.join(save_path, 'Erros'), exist_ok=True)
+    df_resultados.to_parquet(os.path.join(save_path, 'Erros', 'Por Usina.parquet'))
     
-    df_geral['Valor'] = df_geral['Valor'].astype(str)
-    
-
-    os.makedirs(os.path.join('Resultados', 'Erros'), exist_ok=True)
-    df_resultados.to_parquet(os.path.join('Resultados', 'Erros', 'Por Usina.parquet'))
-    df_geral.to_parquet(os.path.join('Resultados', 'Erros', 'Gerais.parquet'))
-    
+    # Gráficos gerais (precisam ser adaptados para usar save_path)
     plotar_gerais(df_resultados, graphs, ext)
     plotar_instabilidade_geral(df_resultados, graphs, ext)
     
-    # Gerar grafico para cada usina
-    for usina in df_resultados['usina'].values:
-        plotar_analise_usina(df_resultados, usina)
-        plotar_geracao_emissao(usina)
+    # Gerar gráficos individuais por usina e modo
+    for usina in df_resultados['usina'].unique():
+        for modo in modos_analise:
+            # Verificar se existe dados para esta combinação
+            df_filtrado = df_resultados[(df_resultados['usina'] == usina) & (df_resultados['modo_analise'] == modo)]
+            if len(df_filtrado) > 0:
+                plotar_analise_usina(df_resultados, usina, previsao, modo)
+                plotar_erro_temporal(usina, previsao, modo)
+                plotar_geracao_emissao(usina, previsao, modo)
+                
+    # =========================================================
+    # COMPARATIVO PADRÃO VS REGRESSÃO L2 (apenas para previsao='1')
+    # =========================================================
+    if previsao == '1':
+        plotar_comparativo_todas_usinas_RN()
+        plotar_comparativo_todas_usinas_emissoes()
+
+
+if __name__ == "__main__":
+    # Exemplo de chamada
+    main(previsao='1')
