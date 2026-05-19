@@ -1,0 +1,166 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Modelo adaptado de "Modelo de TCC do Curso de Engenharia de Controle e Automação da UFSC - Campus Blumenau" em mar/2022.
+%%% Adaptado em nov/2025 por Tatiana Pazelli
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[12pt, openany, oneside, a4paper, english, brazil]{abntex2}   % Padrão Abntex2
+
+\input{style/packages.tex} % resto dos pacotes Latex
+
+%\usepackage[english]{style/UFSCar-DEE-Monograph} % personalização da ABNTEX2 para escrita em inglês
+\usepackage[portuguese]{style/UFSCar-DEE-Monograph} % personalização da ABNTEX2 para escrita em português
+
+
+%---------------------------------------------------------------
+%--------- DADOS BÁSICOS DO TRABALHO (Preencher todos) ---------
+%---------------------------------------------------------------
+
+\titulo{Previsão de Emissões de CO$_2$ de Usinas Termelétricas Nacionais utilizando Redes Neurais Artificiais}   % Título do Trabalho em Português
+\tituloingles{CO$_2$ Emissions Forecasting for National Thermoelectric Power Plants using Artificial Neural Networks}   % Título do Trabalho em Inglês
+
+\palavraschave{palavrachave1; palavrachave2; palavrachave3.}  % 3-6 palavras-chave
+\keywords{keyword1; keyword2; keyword3.}   % 3-6 palavras-chave para resumo em inglês
+
+\DEELautor{Giovanni}{Aurelio} % Aluno autor do trabalho
+
+\curso{Engenharia Elétrica}												
+\orientador{Prof. Dr. Guilherme Guimarães Lage}  % Professor Orientador membro da banca 
+\orientadoruni{Universidade Federal de São Carlos} % Universidade de origem do professor orientador
+
+\membrob{Prof. Dr. XXX1}   % Professor membro da banca
+\membrobuni{Universidade XXX1}   % Universidade de origem do professor membro da banca 
+\membroc{Prof. Dr. XXX2}   % Professor membro da banca
+\membrocuni{Universidade XXX2}   % Universidade de origem do professor membro da banca 
+
+\local{São Carlos}   % Cidade da instituição
+\data{\the\year}        % Ano de realização
+
+
+%--------------------------------------------------------------------------------------------
+
+\begin{document}
+% Seleção automática do idioma, não alterar
+\ifx\isenglish\undefined
+    \selectlanguage{brazil}
+\else
+    \selectlanguage{english}
+\fi
+
+% Texto da Dedicatória (OBS: dedicatória é opcional)
+% Caso não queira inserir, deixe em branco ( \dedicatoria{} )
+\DEELdedicatoria{Dedico este trabalho a todos que me ajudaram a superar os desafios, em especial, os meus colegas da turma Elétrica 019. Sem vocês, tudo seria mais difícil.}  
+    
+% Texto dos Agradecimentos (OBS: Agradecimentos é opcional)
+% Caso não queira inserir, deixe em branco ( \agradecimentos{} )
+\DEELagradecimentos{Agradeço a meu pai, minha mãe.} 
+    
+                                  
+% Texto da Epígrafe (OBS: Epígrafe é opcional)
+% Caso não queira inserir, deixe em branco ( \epigrafe{} )
+\DEELepigrafe{\textit{"Nós sempre nos definimos pela capacidade de superar o impossível."} \\ (Joseph Cooper)} 
+    
+
+% Texto do Resumo (OBS: Resumo é Obrigatório)
+\DEELresumo{Embora a maior parte da energia elétrica no Brasil provenha de usinas hidroelétricas, 
+as termoelétricas são fundamentais para a segurança energética nacional. No entanto, com as mudanças 
+climáticas causadas pelas emissões de CO$_2$ de diversos setores econômicos, é crucial equilibrar 
+essa segurança com as emissões de CO$_2$ no setor elétrico brasileiro. Este trabalho propõe estimar 
+as emissões horárias de CO$_2$ equivalente (CO$_2$-e) das termoelétricas brasileiras usando redes 
+neurais para apoiar o planejamento energético e ambiental do Sistema Interligado Nacional. 
+Enquanto a literatura baseia a modelagem dessas emissões em funções específicas para cada usina, 
+as emissões no Brasil são inventariadas pela Eletrobras e pelo Instituto de Energia e Meio Ambiente 
+em uma base anual. Para contornar isso, este estudo discretiza as emissões anuais de cada usina em 
+estimativas horárias, utilizando regressão não linear em função de dados disponibilizados pelo 
+Operador Nacional do Sistema Elétrico. Com isso, é possível generalizar as estimativas de emissões 
+horárias das termoelétricas brasileiras. Este trabalho inclui análises para quatro termoelétricas 
+com diferentes capacidades de geração, ciclos de operação e combustíveis, fornecendo \textit{insights} 
+para o planejamento energético, elétrico e ambiental do país.} 
+     
+% Texto do Abstract (OBS: Abstract é Obrigatório)
+\DEELabstract{Although most of Brazil's electric energy comes from hydroelectric plants, 
+thermal power plants are crucial for national energy security. However, with climate 
+change caused by CO$_2$ emissions from various economic sectors, 
+it is crucial to balance this security with CO$_2$ emissions in the Brazilian 
+electricity sector. This work proposes estimating hourly CO$_2$ equivalent (CO$_2$-e) 
+emissions from Brazilian thermal power plants using neural networks to support energy and 
+environmental planning of the National Interconnected System. While the literature bases 
+the modeling of these emissions on specific functions for each plant, emissions in Brazil are 
+inventoried by Eletrobras and the Instituto de Energia e Meio Ambiente on an annual basis. 
+To overcome this, this work discretizes the annual emissions of each plant into hourly estimates 
+using nonlinear regression based on data provided by the Operador Nacional do Sistema Elétrico. 
+This enables generalizing the estimates of hourly emissions from Brazilian thermal power plants. 
+This work includes analyses for four thermal power plants with different generation capacities, 
+operation cycles, and fuels, providing insights for energy, electric, and environmental planning 
+in the country.} 
+
+% Elementos pré-textuais
+\ElementosPreTextuais
+% Insere todos os elementos Pré-Textuais listados (capa, folha de rosto, ...)
+    % capa                   % Obrigatório
+    % folhaderosto           % Obrigatório
+    % folhaaprovacao         % Obrigatório na versão final
+	% dedicatoria            % Opcional
+	% agradecimentos         % Opcional
+    % epigrafe               % Opcional
+    % resumo                 % Obrigatório
+    % abstract               % Obrigatório
+
+\newpage
+
+%--------Lista de figuras--------
+\ListaDeFiguras
+\newpage
+%--------Lista de tabelas--------
+\ListaDeTabelas
+\newpage
+%--------Lista de Siglas e Abreviaturas--------
+\include{list_siglas}
+\newpage
+%--------Lista de Simbolos e Notação--------
+\include{list_simbolos}
+\newpage
+%--------Sumário-------
+\Sumario
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%
+%%Elementos Textuais%%
+%%%%%%%%%%%%%%%%%%%%%%
+\textual 
+
+\include{capitulos/1_introducao} % Texto do cap1.tex
+
+\include{capitulos/2_revisaoBibliografica} % Texto do cap2.tex
+
+\include{capitulos/3_metodologia} % Texto do cap3.tex
+
+\include{capitulos/4_desenvolvimento} % Texto do cap4.tex
+
+\include{capitulos/5_resultados} % Texto do cap5.tex
+
+\include{capitulos/6_conclusoes} % Texto do cap6.tex
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%Elementos Pós-Textuais%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%--------Bibliografia--------
+\Bibliografia{referenciasbibliograficas} % arquivo bibtex com as referências (referenciasbibliograficas.bib)
+
+%%--------Apêndice--------
+%% Descomente caso exista a necessidade da inclusão de apêndices
+%\apendice % Comando que inclui os apêndices
+\appendix
+\include{apendices/1_apendice1}   % Arquivo apendice_1.tex
+% \include{apendices/apendice_2}   % Arquivo apendice_2.tex
+%%---------------------------------------------------------------
+
+%%--------Anexos-------------------------------------------------
+%% Descomente caso exista a necessidade da inclusão de anexos
+%\anexo % Comando que inclui os anexos (outros autores)
+\appendix
+\include{anexos/1_anexo}  % Arquivo anexo_1.tex
+% \include{anexos/anexo_2}  % Arquivo anexo_2.tex
+%%---------------------------------------------------------------
+
+\end{document}

@@ -1,0 +1,168 @@
+\chapter{Desenvolvimento}\label{chp:des}
+
+\section{Organização Geral da Implementação}
+
+Todo o código foi desenvolvido na linguagem Python, versão 3.10.12, utilizando as bibliotecas Pandas e NumPy para manipulação dos dados, \ac{AMPL} (via biblioteca \emph{amplpy}) para a calibração dos coeficientes, e PyTorch para a construção e treinamento da rede neural.
+
+O desenvolvimento foi estruturado em três módulos principais:
+
+\begin{itemize}
+    \item \textbf{Módulo 1 – Pré-processamento:} filtragem das usinas, organização temporal, classificação de categorias, identificação de transições e cálculo de duração/fase.
+
+    \item \textbf{Módulo 2 – Calibração (AMPL/IPOPT):} modelagem do problema de otimização, integração Python-AMPL, ajuste do parâmetro de regularização e geração das emissões sintéticas.
+
+    \item \textbf{Módulo 3 – Rede Neural (PyTorch):} construção da arquitetura MLP, ponderação das amostras, treinamento com early stopping e gradient clipping.
+\end{itemize}
+
+Todos os experimentos foram executados em um computador com processador AMD Ryzen 5 5600X (12 núcleos), 16 GB de RAM e GPU NVIDIA RTX 5070 (12 GB), sob sistema operacional Windows 11.
+
+\section{Implementação do Pré-Processamento}
+
+\subsection{Filtragem das Usinas e Organização Temporal}
+
+O primeiro passo consistiu em integrar as duas fontes de dados e garantir a consistência do conjunto para o período analisado (2020 a 2024). A partir dos dados da \ac{ONS}, filtrou-se inicialmente apenas as usinas termelétricas. 
+
+Em seguida, implementou-se um algoritmo para reter apenas as usinas que possuíam registros completos em todos os inventários anuais do \ac{IEMA} para o período de interesse. Usinas de cogeração foram automaticamente excluídas devido à ausência de informações de potência instalada e eficiência energética nos inventários.
+
+Após a filtragem, cada usina foi identificada unicamente por seu \ac{CEG}. Os dados horários de geração de cada usina foram então separados por ano e concatenados em uma única série temporal por usina, preservando duas colunas fundamentais: ``Ano'' (2020 a 2024) e ``Índice'' (posição da hora dentro do ano, variando de 1 a 8760, ou 8784 para anos bissextos). Esta organização permitiu manter a estrutura temporal necessária para etapas subsequentes.
+
+\subsection{Classificação das Categorias de Geração}
+
+O algoritmo de classificação de categorias foi implementado conforme o procedimento descrito na Metodologia. A implementação percorre todos os valores de geração acima de 20 MW, agrupando aqueles cuja diferença relativa em relação à média do grupo não excede o limiar de 15\%. Após a formação inicial dos grupos, realiza-se uma etapa iterativa de mesclagem, na qual grupos cujas médias diferem em menos de 15\% são combinados. Por fim, valores abaixo do limiar de 20 MW são atribuídos à categoria 1, pois representam carga muito baixa ou desligamento.
+
+\subsection{Identificação de Transições}
+
+Para identificar horas em transição, implementou-se uma função que percorre o vetor de categorias com uma janela deslizante de três horas anteriores e três horas posteriores. Para cada hora central da janela, calcula-se a moda das categorias nos seis instantes vizinhos. Se a categoria da hora central for diferente da moda dos vizinhos, a hora é marcada como transição.
+
+As horas nas bordas do ano utilizam apenas as informações disponíveis para determinação de sua classificação.
+
+\section{Implementação da Calibração no \ac{AMPL}}
+
+\subsection{Estrutura do Modelo de Otimização}
+
+O problema de minimização foi modelado na linguagem \ac{AMPL}. Foram criados dois arquivos: um arquivo de modelo (\emph{.mod}) contendo as variáveis, a função objetivo e as restrições; e um arquivo de comandos (\emph{.run}) especificando as opções do solver \ac{IPOPT}.
+
+A função objetivo implementa a Equação \textbf{INSERIR NUMERAÇÃO} para o cenário padrão, com a adição do termo de regularização L2. Os dados de geração horária e a emissão anual alvo são fornecidos separadamente.
+
+\subsection{Integração Python-\ac{AMPL}}
+
+Para automatizar a calibração das 39 usinas, utilizou-se a biblioteca \emph{amplpy}. O fluxo de integração foi o seguinte:
+
+\begin{itemize}
+    \item Para cada usina, extraem-se os dados de geração horária e a emissão anual correspondente do \ac{IEMA};
+
+    \item Os dados são escritos em um arquivo \emph{.dat} para cada usina;
+
+    \item O modelo \ac{AMPL} é iterado em cada usina, com seu respectivo arquivo \emph{.dat} importado;
+
+    \item O solver \ac{IPOPT} é executado;
+
+    \item Os coeficientes otimizados são extraídos e armazenados em um dicionário Python.
+\end{itemize}
+
+Este processo foi executado em paralelo utilizando a biblioteca \emph{multiprocessing}, reduzindo o tempo total de calibração de aproximadamente 8 horas em processamento serial para cerca de 2 horas.
+
+\subsection{Ajuste do Parâmetro de Regularização $\lambda$}
+
+O parâmetro $\lambda$ foi ajustado por meio de testes empíricos com os valores 1, 10, 30 e 100. Para cada valor, calibrou-se um subconjunto de 10 usinas representativas e avaliou-se o erro \ac{MAE} médio e a variância dos coeficientes entre anos consecutivos.
+
+O valor $\lambda = 30$ foi selecionado por apresentar o melhor equilíbrio. Valores superiores como $\lambda=100$ introduziram viés excessivo, enquanto valores inferiores como $\lambda=1$ não foram suficientes para estabilizar os coeficientes.
+
+\subsection{Geração das Emissões Sintéticas Horárias}
+
+Uma vez calibrados os coeficientes para cada usina, aplicou-se a Equação \textbf{INSERIR NUMERO} sobre a série horária de geração para produzir as emissões sintéticas. Este procedimento foi executado separadamente para os dois cenários, padrão e com regularização L2.
+
+\section{Preparação das Features para a Rede Neural}
+
+\subsection{Tratamento das Variáveis}
+
+Antes do treinamento, as variáveis de entrada foram preparadas conforme as Tabelas \ref{tab:var_est} e \ref{tab:var_din}.
+
+\begin{table}[H]
+    \center
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Variável}     & \textbf{Tratamento} & \textbf{Justificativa}                 \\ \hline
+        Combustível           & One-Hot Encoding    & Categoria nominal sem ordem intrínseca \\ \hline
+        Ciclo de operação     & One-Hot Encoding    & Categoria nominal                      \\ \hline
+        Potência instalada    & Sem normalização    & Possui significado físico direto       \\ \hline
+        Eficiência energética & Sem normalização    & Possui significado físico direto       \\ \hline
+        Fator de capacidade   & Sem normalização    & Possui significado físico direto       \\ \hline
+    \end{tabular}
+    \caption{Tratamento das Variáveis Estáticas}
+    \label{tab:var_est}
+\end{table}
+
+\begin{table}[H]
+    \center
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabularx}{\textwidth}{|c|c|X|}
+        \hline
+        \textbf{Variável}        & \textbf{Tratamento}              & \textbf{Justificativa}                          \\ \hline
+        Geração (MW)             & Standard Scaler                  & Ajustado após divisão treino/validação/teste                       \\ \hline
+        Duração da transição (h) & Standard Scaler                  & Ajustado para rede neural                       \\ \hline
+        Fase da transição        & Standard Scaler                  & Ajustado para rede neural                       \\ \hline
+        Índice temporal          & Seno/Cosseno (Codificação polar) & Preserva periodicidade anual                    \\ \hline
+        Ano                      & Seno/Cosseno (Codificação polar) & Permite capturar tendências anuais não lineares \\ \hline
+        \caption{Tratamento das Variáveis Dinâmicas}\label{tab:var_din}
+    \end{tabularx}
+\end{table}
+
+\subsection{Cálculo da Duração e Fase da Transição}
+
+Ademais, o cálculo da duração e fase das gerações de transição foi implementado varrendo o vetor binário de transição e identificando blocos consecutivos onde o valor é 1. Para cada bloco, a duração é o comprimento do bloco, e a fase é atribuída conforme a posição relativa: primeira hora = 1, última hora = 3, horas intermediárias = 2. Transições de duração 1 recebem fase = 1.
+
+\section{Implementação da Rede Neural}
+
+\subsection{Construção da Arquitetura \ac{MLP}}
+
+A rede neural foi implementada utilizando PyTorch. A escolha desta biblioteca deveu-se à possibilidade de executar o treinamento, validação e teste utilizando a GPU da máquina, acelerando significativamente o processamento. 
+
+A arquitetura seguiu a estrutura definida na Tabela \textbf{INSERIR NUMERO}: três camadas ocultas com 128, 64 e 32 neurônios, ativação \ac{ReLU}, \emph{dropout} de 0,3 após cada camada oculta, e camada de saída com um neurônio e ativação \ac{ReLU} para garantir não-negatividade das emissões. O horizonte de previsão foi definido como 1 hora.
+
+\subsection{Ponderação Diferenciada para Transições}
+
+Para melhorar a capacidade do modelo em aprender eventos de transição, implementou-se um sistema de ponderação na função de perda. Cada amostra recebeu um peso individual: 1,0 para horas em regime estável e 5,0 para horas classificadas como transição.
+
+O valor 5 foi escolhido empiricamente: pesos menores como 2 ou 3 não produziram melhora significativa no erro das transições, enquanto pesos maiores como 10 causaram overfitting a esses eventos.
+
+\subsection{Early Stopping e Gradient Clipping}
+
+O método early stopping foi implementado manualmente no loop de treinamento, visando obter os melhores valores para os pesos. Assim, se nenhuma melhora fosse observada após 50 épocas consecutivas, o treinamento é interrompido e os pesos da melhor época eram restaurados. 
+
+O gradient clipping atua juntamente, calculando o gradiente e atualizando os pesos para mantê-los no limiar de [-1, 1], evitando que os gradientes se tornem excessivamente grandes durante a retropropagação.
+
+\section{Divisão dos Dados e Configuração do Treinamento}
+
+A divisão temporal dos dados foi configurada conforme a Tabela \ref{tab:div_dados}
+
+\begin{table}[H]
+    \center
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{Conjunto} & \textbf{Período} & \textbf{Finalidade}                        \\ \hline
+        Treinamento       & 2020, 2021, 2022 & Ajuste dos pesos                           \\ \hline
+        Validação         & 2023             & Early stopping, seleção de hiperparâmetros \\ \hline
+        Teste             & 2024               & Avaliação final do modelo                  \\ \hline
+    \end{tabular}
+    \caption{Divisão Temporal dos Dados}
+    \label{tab:div_dados}
+\end{table}
+
+Os hiperparâmetros de treinamento foram configurados conforme a Tabela \ref{tab:hiperparam}
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{2}
+    \begin{tabular}{|c|c|c|}
+    \hline
+        \textbf{Métrica}       & \textbf{Fórmula}           & \textbf{Justificativa}                             \\ \hline
+        MAE (tCO$_2$/h)                    & $\frac{1}{n}\sum y_i - \hat{y}_i$ & Interpretação direta na unidade original  \\ \hline
+        MSE (tCO$_2$/h)$^2$ & $\frac{1}{n}\sum (y_i - \hat{y}_i)^2$            & Penaliza erros grandes                    \\ \hline
+        RMSE (tCO$_2$/h)                   & $\sqrt{MSE}$            & Mesma unidade do MAE, sensível a outliers \\ \hline
+    \end{tabular}
+    \caption{Hiperparâmetros de Treinamento}
+    \label{tab:hiperparam}
+\end{table}

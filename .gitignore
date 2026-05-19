@@ -2,3 +2,53 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Arquivos gerados pelo LaTeX
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.lol
+*.loa
+*.lol
+*.synctex.gz
+*.synctex.gz(busy)
+**/svg-inkscape/
+
+# Arquivos de bibliografia
+*.bbl
+*.blg
+*.bcf
+*.run.xml
+*.bcf
+*.bbl
+
+# Índice
+*.idx
+*.ind
+*.ilg
+*.ist
+
+# Arquivos temporários de ferramentas
+*.fls
+*.fdb_latexmk
+*.xdv
+*.xdv
+
+# Arquivos de dependências
+*.dep
+*.dvi
+
+# Arquivos de navegação do editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Pastas temporárias
+_tmp/
+tmp/
+latex-temp/

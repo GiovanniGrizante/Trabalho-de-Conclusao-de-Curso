@@ -8,18 +8,16 @@
 # -----------------
 
 set ANO;
-param H {ANO};
 set HORARIO {a in ANO} ordered := 0..H[a];
 
 # -----------------
 # Parâmetros
 # -----------------
 
+param H {ANO};
 param emissoes {ANO}; # em kg de CO2e
 
 param pg {a in ANO, h in HORARIO[a]};
-param delta_pg_ant {a in ANO, h in HORARIO[a]};
-param delta_pg_pos {a in ANO, h in HORARIO[a]};
 
 param S_base := 100;
 

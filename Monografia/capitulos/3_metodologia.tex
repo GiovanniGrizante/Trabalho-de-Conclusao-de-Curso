@@ -1,0 +1,213 @@
+\chapter{Metodologia}\label{chp:met}
+
+\section{Visão Geral}
+
+A estimação horária de emissões de \ac{CO$_2$} em usinas termelétricas configura-se como um problema inverso: dispõe-se de medições anuais agregadas, fornecidas pelos inventários do \ac{IEMA}, mas necessita-se do comportamento horário para aplicações em planejamento energético e despacho econômico-ambiental. Além disso, a relação entre geração horária e emissão é intrinsecamente não-linear (\textbf{INSERIR REFERÊNCIA DO ARTIGO}).
+
+Para enfrentar esses desafios, a metodologia proposta estrutura-se em duas etapas complementares. Na primeira etapa, resolve-se um problema de otimização não-linear para calibrar os coeficientes de uma equação paramétrica de emissão horária, utilizando como referência os totais anuais disponibilizados pelo \ac{IEMA}. Para mitigar o mal condicionamento desse problema inverso, aplica-se regularização L2, sendo comparados dois cenários: calibração padrão e calibração com regularização.
+
+Na segunda etapa, as emissões sintéticas horárias geradas pela equação calibrada tornam-se o alvo para o treinamento de uma rede neural \ac{MLP}. A rede aprende diretamente a relação entre as variáveis operacionais (geração, categoria de operação, fase de transição), as características estáticas da usina (combustível, potência instalada, eficiência) e a emissão horária, sem incorporar explicitamente a equação física na função de perda.
+
+Essa abordagem em cascata permite: 
+
+\begin{itemize}
+    \item Garantir consistência com os totais anuais do IEMA;
+
+    \item Capturar não-linearidades que a equação paramétrica pode não expressar plenamente;
+
+    \item Avaliar, por meio da comparação entre os cenários padrão e L2, qual estratégia de calibração produz alvos sintéticos mais coerentes.
+\end{itemize}
+
+\section{Fontes de Dados e Descrição das Variáveis}
+Foram empregadas duas fontes principais de dados, abrangendo o período de 2020 a 2024.\\
+
+\textbf{Operador Nacional do Sistema Elétrico (ONS)}
+
+Por meio da iniciativa Dados Abertos, obtém-se a geração horária de todas as usinas do Sistema Interligado Nacional (SIN). Os registros incluem: identificação da usina, data, hora e geração horária em MW. O conjunto é filtrado para reter apenas usinas termelétricas.\\
+
+\textbf{Instituto de Energia e Meio Ambiente (IEMA)}
+
+Os inventários anuais do IEMA fornecem:
+
+\begin{itemize}
+    \item Emissões totais anuais de \ac{tCO$_2$e} por usina;
+
+    \item Características cadastrais fixas: potência instalada (MW), fator de capacidade (\%), eficiência energética (\%), tipo de combustível e ciclo de operação (ciclo combinado, ciclo simples, cogeração).
+\end{itemize}
+
+Usinas de cogeração são excluídas da análise por não apresentarem, nos inventários do \ac{IEMA}, informações completas de potência instalada e eficiência. Após a integração das fontes e a remoção de registros faltantes, restam 39 usinas termelétricas com dados completos para o período 2020-2024. As emissões anuais são mantidas em \ac{tCO$_2$e}, e a geração horária em MW.
+
+\section{Tratamento das Sazonalidades Temporais}
+A variável temporal ``Índice'', que representam a posição da hora dentro do ano, não pode ser tratada como grandeza ordinal linear, pois a relação entre instantes próximos ao final e ao início de um ano ou período não é capturada por uma codificação escalar convencional.
+
+Para preservar a periodicidade natural do calendário, adota-se uma codificação polar. Ou seja, dado um índice $i \in [1, H]$, onde $H \in \{8760, 8784\}$, representando as horas do respectivo ano, definem-se as seguintes transformações: 
+
+$$\text{Seno\_Indice}(i) = \sin{\left(\frac{2\pi i}{H}\right)},\\$$
+$$\text{Cosseno\_Indice}(i) = \cos{\left(\frac{2\pi i}{H}\right)}$$
+
+Dessa forma, ao agrupar os dados de forma crescente em relação a variável ``Ano'', essa representação mapeia valores temporais para pontos sobre o círculo unitário, de modo que instantes próximos tornam-se vizinhos no espaço polar, refletindo sua continuidade temporal.
+
+\section{Modelagem das Transições Operacionais}
+
+Termelétricas operam tipicamente em patamares discretos de carga, não em regime continuamente variável. Para capturar esse comportamento, define-se um sistema de categorias de geração com base na proximidade relativa entre valores de potência.
+
+\subsection{Definição de Categorias}
+
+Dada a série de geração horária $G=[g_1,g_2, \ldots , g_T]$ em MW, valores inferiores a 20 MW são classificados na categoria 1, pois é considerado uma carga muito baixa ou desligamento. Para os demais valores, dois pontos pertencem à mesma categoria se sua diferença relativa for inferior ou igual a um limiar $\theta=15\%$ do maior valor do grupo.
+
+Formalmente, $g_i$ e $g_j$ pertencem à mesma categoria se:
+
+$$\frac{|g_i - g_j|}{\max(g_i,g_j)} \leq \theta$$
+
+O limiar de 15\% foi definido com base na análise exploratória da distribuição de carga nos dados da ONS, representando o valor típico que separa regimes operacionais distintos.
+
+\subsection{Identificação de Transições}
+
+Complementando a definição das categorias de geração, foi implementado um algoritmo para identificação das gerações em estágio de transição entre categorias.
+
+Isto é, seja $c_t$ a categoria no instante $t$. Define-se a moda $m_t$ das categorias em uma janela de três horas anteriores e três horas posteriores, excluindo o próprio instante:
+
+$$m_t = moda\{c_{t-3}, c_{t-2}, c_{t-1}, c_{t+1}, c_{t+2}, c_{t+3}\}$$
+
+O instante $t$ é classificado como transição se $c_t \neq m_t$. Com isso, é atribuído um valor de categoria 0 para esses dados de geração. Este critério captura períodos de rampa de carga como partidas, paradas e variações controladas, nos quais o fator de emissão horária pode diferenciar do regime estabilizado.
+
+\subsection{Duração e Fase da Transição.}
+
+Para cada evento de transição contínuo, ou seja, sequência de horas consecutivas classificadas como transição, definem-se:
+
+\begin{itemize}
+    \item Duração: Número de horas consecutivas do evento;
+    \item Fase: Posição relativa dentro do evento, classificada como 1 (início), 2 (meio) ou 3 (fim).
+\end{itemize}
+
+Essas variáveis permitem que o modelo compreenda a transição como um processo contínuo, com dinâmica de emissão potencialmente distinta ao longo de suas fases.
+
+\section{Formulação do Problema de Calibração}
+
+A relação entre geração horária e emissão horária é modelada por uma equação com termo quadrático e termo exponencial, conforme proposta na literatura \cite{gent1971minimum, talaq1994summary}:
+
+\begin{equation}
+E_k^{\text{horária}}(P_{G_i}) = \alpha_k P_{G_i}^2 + \beta_k P_{G_i} + \gamma_k + \omega_k e^{\mu_k P_{G_i}}
+\label{eq:emissao_horaria}
+\end{equation}
+
+onde:
+\begin{itemize}
+    \item $P_{G_i}$ representa a geração em MW, dividida por 100 para normalização dos dados, garantindo estabilidade numérica no termo exponencial;
+    \item $\alpha_k, \beta_k, \gamma_k, \omega_k, \mu_k$ são coeficientes a serem calibrados por usina;
+    \item O subscrito $k$ indica a usina.
+\end{itemize}
+
+\subsection{Problema de Minimização}
+
+Os coeficientes são obtidos resolvendo o seguinte problema de minimização, que busca minimizar o erro quadrático médio entre a emissão anual estimada (somatório das emissões horárias) e a emissão anual real fornecida pelo IEMA \cite{schmidt2026estimacao}:
+
+\begin{equation}
+\min_{\alpha,\beta,\gamma,\omega,\mu} \frac{1}{N} \sum_{j=1}^{N} \left( \sum_{i=1}^{H} E_{\text{usina}}^i(P_{G_i}) - E_{\text{usina}}^j \right)^2
+\label{eq:minimizacao}
+\end{equation}
+
+sujeito às restrições físicas:
+\begin{equation}
+\alpha \geq 0,\quad \gamma \geq 0,\quad \omega \geq 0,\quad \mu \leq \mu_{\max}
+\label{eq:restricoes}
+\end{equation}
+
+onde:
+\begin{itemize}
+    \item $N$ é o número de usinas;
+    \item $H = 8760$ horas para anos não bissextos (ou $8784$ para anos bissextos);
+    \item $E_{\text{usina}}^j$ é a emissão anual real do IEMA para a usina $j$;
+    \item $\mu_{\max}$ é um limite superior para evitar \textit{overflow} numérico do termo exponencial (definido empiricamente em $0,5$).
+\end{itemize}
+
+A restrição de não-negatividade sobre $\alpha$, $\gamma$ e $\omega$ garante que a contribuição dos respectivos termos seja fisicamente coerente, pois representam taxas de emissão que são positivas por natureza \cite{wood2013power}.
+
+\subsection{Regularização L2}
+
+O problema de calibração inversa é intrinsecamente mal condicionado, podendo produzir coeficientes excessivamente elevados que se cancelam mutuamente (\textit{overfitting} na calibração). Para mitigar esse efeito, introduz-se um termo de regularização L2 (Tikhonov) à função objetivo \cite{tikhonov1977solutions}:
+
+\begin{equation}
+\min \frac{1}{N} \sum_{j=1}^{N} \left( \sum_{i=1}^{H} E_{\text{usina}}^i(P_{G_i}) - E_{\text{usina}}^j \right)^2 + \lambda \left( \alpha^2 + \beta^2 + \gamma^2 + \omega^2 + \mu^2 \right)
+\label{eq:regularizacao}
+\end{equation}
+
+sujeito às mesmas restrições da calibração padrão. O parâmetro $\lambda \geq 0$ controla a intensidade da regularização: $\lambda = 0$ recupera o problema padrão, enquanto valores positivos penalizam coeficientes de grande magnitude, promovendo soluções mais estáveis e generalizáveis. O valor de $\lambda$ deve ser selecionado de forma a equilibrar a redução do erro de calibração e a estabilidade dos coeficientes \cite{schmidt2026estimacao}.
+
+\section{Emissões Sintéticas como Alvos para Aprendizado}
+
+Uma vez calibrados os coeficientes (para os cenários padrão e com regularização L2), aplica-se a Equação \ref{eq:emissao_horaria} sobre a série horária de geração para produzir as **emissões sintéticas horárias** $\hat{E}_t$. Essas emissões sintéticas tornam-se a variável alvo para o treinamento supervisionado da rede neural.
+
+É importante observar que a rede neural, ao ser treinada com esses alvos sintéticos, herda os erros de modelagem da equação paramétrica e da calibração. Conforme discutido por Schmidt \cite{schmidt2026estimacao}, os dados sintéticos gerados por RNL refletem integralmente as premissas e limitações do modelo paramétrico utilizado. Portanto, a comparação entre os cenários padrão e L2 não avalia apenas a qualidade da rede, mas também qual estratégia de calibração produz alvos mais consistentes para o aprendizado supervisionado.
+
+A fidelidade da base sintética depende diretamente da qualidade do ajuste e da capacidade do modelo paramétrico em representar o comportamento real de emissão da usina. A documentação completa do método de geração e de suas limitações é essencial para o uso confiável desses dados \cite{nowok2016synthpop}.
+
+\section{Arquitetura da Rede Neural}
+Optou-se por uma arquitetura do tipo \ac{MLP} em detrimento de redes recorrentes, como \ac{LSTM} ou \ac{GRU}, porque a emissão horária, no modelo proposto, depende essencialmente da geração no mesmo instante $t$, e não de uma sequência temporal longa. A MLP é suficiente, mais simples e menos suscetível a overfitting com o volume de dados disponível.
+
+\subsection{Estrutura das Camadas}
+
+A Tabela \ref{tab:arq_rede} apresenta a arquitetura adotada.
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{Camada} & \textbf{Neurônios} & \textbf{Ativação} & \textbf{Regularização} \\ \hline
+        Entrada         & Variável           & -                 & -                      \\ \hline
+        Oculta 1        & 128                & ReLU              & Dropout (0,3)          \\ \hline
+        Oculta 2        & 64                 & ReLU              & Dropout (0,3)          \\ \hline
+        Oculta 3        & 32                 & ReLU              & Dropout (0,3)          \\ \hline
+        Saída           & 1                  & ReLU              & -                      \\ \hline
+    \end{tabular}
+    \caption{Arquitetura da Rede Neural \ac{MLP}}
+    \label{tab:arq_rede}
+\end{table}
+
+A arquitetura em funil reduz progressivamente a capacidade representacional, atuando como uma forma de regularização e prevenindo overfitting. A função de ativação \ac{ReLU} é escolhida por sua simplicidade computacional e por mitigar o problema do gradiente transitório em comparação com funções sigmoidais. O dropout com taxa de 0,3 desativa aleatoriamente 30\% dos neurônios a cada iteração de treinamento, forçando a rede a aprender representações redundantes e robustas.
+
+\subsection{Estratégias de Regularização Adicionais}
+
+Além do \textit{dropout}, empregam-se as seguintes estratégias de regularização:
+
+\begin{itemize}
+    \item Early stopping: o treinamento é interrompido quando a perda no conjunto de validação não apresenta melhora por um número pré-definido de épocas, restaurando os pesos da melhor época. Isso evita overfitting ao interromper o treinamento antes que a rede memorize ruídos.
+
+    \item Gradient clipping: a norma L2 do vetor de gradientes é limitada a um valor máximo antes da atualização dos pesos. Esta técnica previne a explosão dos gradientes, fenômeno que pode ocorrer quando a função de perda apresenta regiões de alta curvatura ou quando amostras com pesos elevados produzem gradientes desproporcionais.
+\end{itemize}
+
+\section{Métricas de Avaliação}
+Para avaliar a qualidade das estimativas, empregam-se as seguintes métricas:
+
+\begin{itemize}
+    \item \ac{MAE}
+
+    $$\text{\ac{MAE}} = \frac{1}{N} \sum^N_{i=1}|y_i - \hat{y_i}|$$
+
+    Interpretável diretamente na unidade \ac{tCO$_2$e}/h.
+
+    \item \ac{MSE}
+
+    $$\text{\ac{MSE}} = \frac{1}{N} \sum^N_{i=1}(y_i - \hat{y_i})^2$$
+
+    Penaliza mais severamente erros grandes, sendo útil para detectar a presença de \emph{outliers}.
+
+    \item Razão de Estabilidade
+
+    $$R = \frac{\text{\ac{MSE}}}{\text{\ac{MAE}}^2}$$
+
+    A razão $R$ é empregada como indicador da estabilidade do modelo:
+
+    \[
+    \left\{
+    \begin{array}{l}
+    \quad R < 3: \text{ Modelo estável, erros concentrados em torno da média;} \\[6pt]
+    
+    \quad 3 \leq R \leq 5: \text{ Instabilidade moderada, presença de alguns \emph{outliers};} \\[6pt]
+    
+    \quad R > 5: \text{ Presença significativa de \emph{outliers}, modelo pouco confiável.}
+    \end{array}
+    \right.
+    \]
+\end{itemize}

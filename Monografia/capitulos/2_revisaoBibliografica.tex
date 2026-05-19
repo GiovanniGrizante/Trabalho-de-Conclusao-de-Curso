@@ -1,0 +1,145 @@
+\chapter{Revisão de Literatura}\label{chp:rev}
+
+\section{Métricas de Emissões e \ac{CO$_2$e}}
+
+A quantificação de emissões de gases de efeito estufa no setor energético brasileiro segue as diretrizes do Painel Intergovernamental sobre Mudanças Climáticas (IPCC, do inglês \textit{Intergovernmental Panel on Climate Change}). Para todo gás \(g \in \{\text{CO}_2, \text{CH}_4, \text{N}_2\text{O}\}\) e combustível \(f\), as emissões são descritas em função da energia consumida e de fatores de emissão específicos: \(E_g = \sum_f \text{AD}_f \cdot \text{EF}_{f,g}\), onde \(\text{AD}_f\) são os dados de atividade (\textit{Activity Data}), correspondentes à energia consumida (em TJ), e \(\text{EF}_{f,g}\) é o fator de emissão (\textit{Emission Factor}) do gás \(g\) para o combustível \(f\) (em kg/TJ) \cite{ipcc2006}.
+
+Após a quantificação das emissões individuais de cada gás, os inventários convertem o valor na unidade equivalente de dióxido de carbono (CO₂e), utilizando os potenciais de aquecimento global (\textit{Global Warming Potential}) do Quinto Relatório de Avaliação do IPCC (AR5):
+
+\begin{equation}
+\text{CO}_2e = \text{CO}_2 + 28 \cdot \text{CH}_4 + 265 \cdot \text{N}_2\text{O}
+\label{eq:co2e}
+\end{equation}
+
+\cite{ipcc2014}. O Instituto de Energia e Meio Ambiente (IEMA) adota esta conversão em seus inventários anuais de emissões atmosféricas de usinas termelétricas, publicados a partir do ano-base 2020 \cite{iema2022, iema2023, iema2024}. Adicionalmente, o IEMA divulga a taxa de emissão de cada usina em tCO₂e/GWh, definida como a razão entre a emissão anual de CO₂e e a energia elétrica gerada no ano, permitindo acompanhar o desempenho ambiental das plantas.
+
+\section{Funções de Emissão Horária}
+
+A estimativa de emissões de uma usina termelétrica em função da sua geração elétrica é um problema recorrente no despacho econômico-ambiental de sistemas de potência. A relação física subjacente decorre da cadeia de conversão energética: a queima do combustível libera energia térmica, que é convertida em trabalho mecânico e, posteriormente, em energia elétrica. Como o fator de emissão do combustível (kg CO₂/GJ) é aproximadamente constante para um dado tipo de combustível, a emissão apresenta a mesma forma funcional que o consumo de combustível \cite{ipcc2006}. Essa propriedade permite modelar diretamente a emissão como função da potência gerada, sem a necessidade de calcular o consumo intermediário de combustível.
+
+A curva de entrada e saída (\textit{input-output curve}) de uma unidade térmica, que relaciona o aporte térmico \(H\) (em GJ/h) à potência elétrica gerada \(P\) (em MW), é classicamente representada por um polinômio de segundo grau \cite{wood2013power}:
+
+\begin{equation}
+H(P) = a + bP + cP^2
+\label{eq:input_output}
+\end{equation}
+
+onde \(a\) representa o aporte térmico a vazio (\textit{no-load heat}), \(b\) o \textit{heat rate} incremental e \(c\) a curvatura associada à perda de eficiência em cargas elevadas. Multiplicando-se cada coeficiente pelo fator de emissão \(\rho\) (kg CO₂e/GJ), obtém-se diretamente a emissão horária como função da potência gerada:
+
+\begin{equation}
+E(P) = a + bP + cP^2 \quad [\text{tCO}_2\text{e}/\text{h}]
+\label{eq:emissao_quadratica}
+\end{equation}
+
+onde \(a\), \(b\) e \(c\) são coeficientes de emissão intrínsecos a cada usina, determinados experimentalmente ou por ajuste a dados operacionais \cite{gent1971minimum, wood2013power}.
+
+Essa formulação quadrática foi proposta por Gent e Lamont \cite{gent1971minimum} no contexto do despacho de mínima emissão de NOx e é amplamente adotada como modelo padrão para representar emissões em regime permanente \cite{kothari2011power}. No mesmo trabalho, os autores propuseram uma extensão com termo exponencial para capturar o aumento abrupto de emissões em altas cargas:
+
+\begin{equation}
+E(P) = a + bP + cP^2 + d \exp(eP)
+\label{eq:emissao_exponencial}
+\end{equation}
+
+Essa formulação foi posteriormente consolidada na revisão de Talaq, El-Hawary e El-Hawary \cite{talaq1994summary}, que compilou os algoritmos de despacho econômico-ambiental desenvolvidos desde 1970. Para CO₂, cuja emissão depende essencialmente da quantidade de combustível queimado e não da temperatura de combustão, a forma quadrática é geralmente suficiente. No entanto, a formulação com termo exponencial é adotada neste trabalho por sua maior flexibilidade para capturar não-linearidades observadas nos dados de diferentes usinas.
+
+Além da forma polinomial, outras representações funcionais têm sido empregadas para capturar a degradação de eficiência em carga parcial. A forma logarítmica utiliza o fato de que o \textit{heat rate} específico cresce de maneira aproximadamente logarítmica conforme a carga se afasta do ponto de projeto \cite{eia2015}. A forma exponencial pura, \(E = a \exp(bP)\), penaliza de maneira mais acentuada operações em carga parcial reduzida, sendo empregada em estudos de flexibilidade operacional de usinas a carvão \cite{henderson2014}.
+
+Cabe ressaltar que todas essas formulações pressupõem operação em regime permanente. Na prática, usinas termelétricas estão sujeitas a mudanças operacionais, como partidas (\textit{start-up}), paradas (\textit{shut-down}) e rampas de carga, que introduzem emissões adicionais não capturadas pelos modelos de regime estacionário \cite{kumar2012}. Dentre esses eventos, a partida é particularmente relevante sob a ótica ambiental: ao ligar uma caldeira, é necessário reaquecer a massa metálica do sistema, purgar gases residuais e estabilizar a combustão, consumindo combustível adicional enquanto a unidade ainda não atingiu a potência mínima para conexão ao sistema \cite{kumar2012}.
+
+\section{Regressão Não Linear}
+
+As formas funcionais apresentadas na seção anterior descrevem a emissão horária de uma termelétrica em função da potência gerada e de variáveis operacionais. Contudo, os coeficientes dessas funções são específicos de cada usina e precisam ser determinados a partir de dados operacionais. Quando a forma funcional contém termos exponenciais, logarítmicos ou racionais, os coeficientes aparecem de maneira não linear no modelo, e sua estimação requer técnicas de Regressão Não Linear (RNL) \cite{seber1989nonlinear}.
+
+Em termos formais, dado um modelo paramétrico \(f(\mathbf{x}; \boldsymbol{\theta})\), onde \(\boldsymbol{\theta} \in \mathbb{R}^q\) é o vetor de parâmetros a ser estimado, o modelo é classificado como não linear nos parâmetros quando ao menos uma derivada parcial \(\partial f/\partial \theta_j\) depende do próprio vetor \(\boldsymbol{\theta}\). Nessa situação, não existe solução analítica fechada para a estimação dos coeficientes, sendo necessário recorrer a algoritmos iterativos de otimização numérica. Modelos lineares nos parâmetros, como polinômios (\(E = a + bP + cP^2\)), possuem solução analítica por Mínimos Quadrados Ordinários, mas por conveniência podem ser ajustados pelo mesmo algoritmo de otimização utilizado para os demais modelos \cite{seber1989nonlinear}.
+
+A estimação dos parâmetros consiste em encontrar o vetor \(\hat{\boldsymbol{\theta}}\) que minimize uma função objetivo \(\mathcal{J}\), a qual quantifica a discrepância entre os valores observados e os preditos pelo modelo:
+
+\begin{equation}
+\hat{\boldsymbol{\theta}} = \arg \min_{\boldsymbol{\theta}} \mathcal{J}(\mathbf{y}, f(\mathbf{X}; \boldsymbol{\theta}))
+\label{eq:estimacao_rnl}
+\end{equation}
+
+A escolha de \(\mathcal{J}\) depende das características do problema. A soma dos quadrados dos resíduos (MSE) é a formulação clássica, mas alternativas como o erro absoluto médio (MAE) e o erro percentual absoluto médio (MAPE) podem ser preferíveis em determinados cenários. O MSE eleva os resíduos ao quadrado, amplificando o peso de valores discrepantes e puxando a solução para acomodá-los; o MAE trata os desvios linearmente, resultando em ajuste mais robusto a \textit{outliers}. O MAPE, por sua vez, normaliza cada resíduo pela magnitude da observação, sendo útil quando se deseja avaliar o erro em termos relativos \cite{myttenaere2016mean}.
+
+No contexto de curvas de emissão de termelétricas, os coeficientes do modelo possuem significado físico e devem ser não negativos (\(\theta \geq 0\)), uma vez que representam taxas de emissão ou de consumo que são positivas por natureza \cite{wood2013power}.
+
+Na prática, a convergência dos algoritmos iterativos utilizados em RNL depende da escolha de valores iniciais e limites de busca adequados. A adoção de estimativas iniciais baseadas em conhecimento físico do problema assegura que a solução obtida possua significado físico e contribui para a aceleração da convergência \cite{seber1989nonlinear}.
+
+A qualidade do ajuste é avaliada pelo coeficiente de determinação \(R^2\), definido como a proporção da variância total dos dados explicada pelo modelo:
+
+\begin{equation}
+R^2 = 1 - \frac{\sum_{i=1}^{N} (y_i - \hat{y}_i)^2}{\sum_{i=1}^{N} (y_i - \bar{y})^2}
+\label{eq:r_quadrado}
+\end{equation}
+
+onde \(\hat{y}_i = f(\mathbf{x}_i; \hat{\boldsymbol{\theta}})\) é o valor predito pelo modelo ajustado e \(\bar{y}\) é a média das observações. Valores de \(R^2\) próximos de \(1\) indicam que o modelo captura a maior parte da variabilidade dos dados. Contudo, em modelos não lineares, o \(R^2\) isolado pode ser insuficiente como critério de validação, sendo recomendável complementá-lo com a análise gráfica de resíduos para verificar a ausência de padrões sistemáticos e a homogeneidade da variância ao longo da faixa de predição \cite{seber1989nonlinear}.
+
+\section{Geração de Dados Sintéticos}
+
+Conforme apresentado na Introdução, os inventários do IEMA fornecem emissões em resolução anual, enquanto os registros do ONS estão disponíveis em base horária. Essa incompatibilidade temporal impede a aplicação direta de técnicas de regressão para modelar emissões horárias. A alternativa adotada neste trabalho consiste em gerar uma base de dados sintéticos horários de emissão, utilizando modelos paramétricos calibrados com os totais anuais disponíveis.
+
+A geração de dados sintéticos busca criar dados que minimamente descrevam efeitos físicos e reais quando aqueles não estão disponíveis, seja por falta de medição ou por questões de confidencialidade. A ideia não é reproduzir cada observação individualmente, mas gerar amostras que preservem as relações estatísticas entre a variável resposta e os preditores presentes nos dados originais \cite{nowok2016synthpop}.
+
+Na prática, isso requer a formulação de um modelo estatístico ou físico-matemático que represente o fenômeno de interesse. A partir desse modelo e de uma base de dados real, geram-se novas observações de modo que a base artificial resultante preserve as correlações e a variabilidade dos dados originais \cite{nowok2016synthpop}.
+
+Assim, a criação de dados sintéticos, quando bem sucedida, permite realizar testes e experimentos sobre uma base de dados que, se tratada apenas com os valores originais, seria insuficiente para estudo. Porém, como essa geração artificial depende diretamente do modelo utilizado e dos dados originais, quanto melhor o modelo descrever a realidade e quanto menor o ruído nos dados de entrada, maior será a confiabilidade dos dados sintéticos. Ainda assim, os dados sintéticos gerados podem reproduzir o formato geral das distribuições, distorcer dependências ou não preservar valores extremos e eventos esparsos \cite{nowok2016synthpop, stenger2024synthetic}.
+
+A geração de bases sintéticas para variáveis dependentes do tempo ou altamente correlacionadas apresenta desafios adicionais. Uma série temporal sintética pode, por exemplo, reproduzir a distribuição marginal de cada variável, mas falhar em replicar padrões de autocorrelação ou relações de defasagem \cite{stenger2024synthetic}.
+
+Em síntese, dados sintéticos constituem um recurso valioso para experimentação e validação quando dados reais são insuficientes, desde que interpretados com cautela — embora sejam capazes de aproximar a estrutura estatística do conjunto original, podem introduzir viés ou enfraquecer relações dinâmicas entre variáveis. A documentação completa do método de geração, das escolhas de parâmetros e de suas limitações é, portanto, essencial para o uso confiável desses dados \cite{nowok2016synthpop, stenger2024synthetic}.
+
+\section{Métricas de Avaliação}
+
+Para quantificar a qualidade do ajuste e a capacidade preditiva dos modelos, são empregadas métricas estatísticas complementares. Essas métricas são utilizadas tanto na etapa de ajuste dos modelos de RNL (como função objetivo a ser minimizada) quanto na avaliação da rede neural. Em todas as definições a seguir, \(y_i\) denota o valor observado, \(\hat{y}_i\) o valor predito pelo modelo, \(\bar{y}\) a média das observações e \(N\) o número total de amostras.
+
+\subsection{Erro Absoluto Médio (MAE)}
+
+O MAE mensura a média aritmética dos desvios absolutos entre valores preditos e observados. Por tratar os desvios de forma linear, é mais robusto a \textit{outliers} do que o MSE \cite{willmott2005advantages}:
+
+\begin{equation}
+\text{MAE} = \frac{1}{N} \sum_{i=1}^{N} |y_i - \hat{y}_i|
+\label{eq:mae}
+\end{equation}
+
+\subsection{Erro Quadrático Médio (MSE)}
+
+O MSE calcula a média dos quadrados dos desvios. Por elevar os erros ao quadrado, penaliza mais severamente erros de grande magnitude \cite{bickel2015mathematical}:
+
+\begin{equation}
+\text{MSE} = \frac{1}{N} \sum_{i=1}^{N} (y_i - \hat{y}_i)^2
+\label{eq:mse}
+\end{equation}
+
+\subsection{Raiz do Erro Quadrático Médio (RMSE)}
+
+O RMSE é obtido pela raiz quadrada do MSE, apresentando o erro na mesma unidade dimensional da variável resposta, o que facilita a interpretação física do desvio \cite{chai2014root}:
+
+\begin{equation}
+\text{RMSE} = \sqrt{\text{MSE}}
+\label{eq:rmse}
+\end{equation}
+
+\subsection{Erro Percentual Absoluto Médio (MAPE)}
+
+O MAPE expressa o desvio em termos relativos (porcentagem), sendo útil para comparar o desempenho do modelo em diferentes escalas de magnitude \cite{myttenaere2016mean}:
+
+\begin{equation}
+\text{MAPE} = \frac{100}{N} \sum_{i=1}^{N} \left| \frac{y_i - \hat{y}_i}{y_i} \right|
+\label{eq:mape}
+\end{equation}
+
+\subsection{Razão de Estabilidade}
+
+A razão \(R = \text{MSE} / \text{MAE}^2\) é empregada como indicador da estabilidade do modelo. Valores baixos de \(R\) indicam que os erros são consistentes, enquanto valores altos sugerem que erros grandes ocorrem com frequência não desprezível:
+
+\begin{equation}
+R = \frac{\text{MSE}}{\text{MAE}^2}
+\label{eq:estabilidade}
+\end{equation}
+
+A interpretação adotada neste trabalho é:
+\begin{itemize}
+    \item \(R < 3\): modelo estável, erros concentrados em torno da média;
+    \item \(3 \leq R \leq 5\): instabilidade moderada, presença de alguns \textit{outliers};
+    \item \(R > 5\): presença significativa de \textit{outliers}, modelo pouco confiável.
+\end{itemize}

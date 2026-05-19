@@ -1,0 +1,271 @@
+\chapter{Resultados}\label{chp:res}
+
+\section{Visão Geral dos Experimentos}
+
+Foram realizados experimentos para os dois cenários propostos na metodologia: calibração padrão e calibração com regularização L2. Para cada cenário, calibrou-se a equação de emissão para 39 usinas termelétricas no período de 2020 a 2024, geraram-se as emissões sintéticas horárias e treinou-se uma rede neural \ac{MLP} com a arquitetura descrita na Seção 3.7. O conjunto de treinamento compreendeu os anos de 2020 a 2022, o conjunto de validação o ano de 2023, e o conjunto de teste o ano de 2024.
+
+Este capítulo apresenta os resultados obtidos, organizados em três blocos principais: 
+
+\begin{enumerate}
+    \item Análise da calibração dos coeficientes no AMPL;
+    \item Desempenho da rede neural nas estimativas horárias;
+    \item Síntese e discussão dos achados, com ênfase na comparação entre os cenários padrão e L2.
+\end{enumerate}
+
+
+\section{Análise do Algoritmo de Minimização}
+
+As Tabelas \ref{tab:min_pad} e \ref{tab:min_L2} apresentam um resumo estatístico dos coeficientes calibrados para os dois cenários, considerando todas as 39 usinas e os 5 anos analisados.
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{2}
+    \begin{tabular}{|c|c|c|c|c|}
+    \hline
+    \textbf{Coeficiente} & \textbf{Média}      & \textbf{Desvio Padrão} & \textbf{Mínimo} & \textbf{Máximo} \\ \hline
+    Alpha                & 892.79   & 4655.59      & 0.0             & 28974.21       \\ \hline
+    Beta                 & 301.12   & 4471.49      & -19549.63      & 18262.05       \\ \hline
+    Gamma                & 18617.37  & 57958.79      & -57831.02      & 282549.77      \\ \hline
+    Omega                & -18531.67  & 57979.78      & -282549.76     & 57833.15       \\ \hline
+    Mu                   & -11055.89 & 69140.89      & -431769.14     & 189.05         \\ \hline
+    MSE                  & 17693.99   & 42001.18      & 0.0             & 231081.89      \\ \hline
+    \end{tabular}
+    \caption{Dados para Minimização Padrão}
+    \label{tab:min_pad}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{2}
+    \begin{tabular}{|c|c|c|c|c|}
+    \hline
+    \textbf{Coeficiente} & \textbf{Média}     & \textbf{Desvio Padrão} & \textbf{Mínimo} & \textbf{Máximo} \\ \hline
+    Alpha                & 5.87  & 8.65      & 0.0             & 35.05          \\ \hline
+    Beta                 & 8.69  & 13.37     & -15.93         & 45.92          \\ \hline
+    Gamma                & 0.21 & 6.87      & -20.44         & 28.09          \\ \hline
+    Omega                & 4.79  & 6.50      & -7.65           & 23.37          \\ \hline
+    Mu                   & 2.96 & 3.96     & -3.23          & 17.41          \\ \hline
+    MSE                  & 53713.20  & 93047.72      & 510.96         & 432081.27      \\ \hline
+    \end{tabular}
+    \caption{Dados para Minimização com Regularização L2}
+    \label{tab:min_L2}
+\end{table}
+
+Com isso, ainda que o valor de \ac{MSE} para a minimização com regularização L2 seja maior, este método promoveu valores fisicamente confiáveis em comparação com os valores obtidos pelo método de minimização padrão.
+
+\section{Desempenho da Rede Neural}
+
+\subsection{Distribuição Geral dos Erros}
+
+As Figuras \ref{fig:hist_padrao} e \ref{fig:hist_L2} mostram os histogramas do erro \ac{MAE} por usina obtidos no conjunto de teste (ano de 2024), respectivamente para o método de minimização padrão e para a abordagem com regularização L2. A escala logarítmica adotada evidencia a distribuição dos erros entre as 39 usinas analisadas.
+
+\begin{figure}[H]
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includesvg[width=\linewidth]{figuras/Padrão/Histograma MAE}
+        \caption{Sem regularização}
+        \label{fig:hist_padrao}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includesvg[width=\linewidth]{figuras/Regressão L2/Histograma MAE_L2}
+        \caption{Com regularização L2}
+        \label{fig:hist_L2}
+    \end{subfigure}
+    \caption{Quantidade de Usinas por Erro MAE}
+    \label{fig:histograma}
+\end{figure}
+
+A Figura \ref{fig:hist_padrao} apresenta o histograma do \ac{MAE} para o cenário de minimização padrão. Observa-se que a maioria das usinas concentra-se na faixa de MAE entre 1,3 e 3,2 \ac{tCO$_2$e}/h, com pico em aproximadamente 1,3 \ac{tCO$_2$}/h. 
+
+No entanto, a distribuição apresenta uma cauda longa para a direita: 9 usinas apresentaram MAE superior a 5 \ac{tCO$_2$}/h, sendo 3 delas com erros superiores a 19 \ac{tCO$_2$e}/h. Esse comportamento indica que, embora o modelo padrão seja capaz de estimar adequadamente as emissões da maioria das usinas, ele falha significativamente para um subconjunto delas.
+
+\textbf{ESCREVER SOBRE O GRAFICO L2}
+Em comparação, o cenário com regularização L2 apresentado na Figura \ref{fig:hist_L2} apresentou uma distribuição mais concentrada, ou seja, com menor dispersão, reduzindo a cauda direita. \textbf{COMPLETAR TEXTO}
+
+As Figuras \ref{fig:dist_padrao} e \ref{fig:dist_L2} complementam a análise dos histogramas ao apresentar o MAE individual de cada usina, ordenado decrescentemente.
+
+\begin{figure}[H]
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includesvg[width=\linewidth]{figuras/Padrão/Dispersão}
+        \caption{Sem regularização}
+        \label{fig:dist_padrao}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includesvg[width=\linewidth]{figuras/Regressão L2/Dispersão_L2}
+        \caption{Com regularização}
+        \label{fig:dist_L2}
+    \end{subfigure}
+    \caption{Distribuição das Usinas por Erro MAE}
+    \label{fig:distr_mae}
+\end{figure}
+
+Analisando os dados apresentados, houve uma significativa discrepância entre a mediana e a média para o modelo de minimização padrão, evidenciando a presença de outliers que degradam o desempenho médio do modelo.
+
+Ademais, apenas 5 usinas apresentam MAE superior a 20 \ac{tCO$_2$}/h, sendo responsáveis por puxar a média para um valor muito acima da mediana. Este padrão de distribuição assimétrica confirma que o cenário de minimização padrão, embora adequado para a maioria das usinas, falha significativamente para um subconjunto específico delas.
+
+Comparativamente, os dados para o modelo com regularização L2 \textbf{COMPLETAR TEXTO REFAZENDO OS GRAFICOS L2}
+
+\subsection{Melhores e Piores Desempenhos}
+
+As Figuras \ref{fig:melhores_padrao} e \ref{fig:piores_padrao} representam os melhores e piores desempenhos das usinas para o método padrão, enquanto que as Figuras \ref{fig:melhores_l2} e \ref{fig:piores_l2} representam os dados para o método com regularização L2.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includesvg[width=\textwidth]{figuras/Padrão/10 Melhores Desempenhos}
+        \caption{Melhores - Sem regularização}
+        \label{fig:melhores_padrao}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includesvg[width=\textwidth]{figuras/Regressão L2/10 Melhores Desempenhos_L2}
+        \caption{Melhores - Com regularização}
+        \label{fig:melhores_l2}
+    \end{subfigure}
+    \\
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includesvg[width=\textwidth]{figuras/Padrão/10 Piores Desempenhos}
+        \caption{Piores - Sem regularização}
+        \label{fig:piores_padrao}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includesvg[width=\textwidth]{figuras/Regressão L2/10 Piores Desempenhos_L2}
+        \caption{Piores - Com regularização}
+        \label{fig:piores_l2}
+    \end{subfigure}
+    \caption{Comparação de Desempenho Favorável e Não Favorável}
+    \label{fig:desempenho}
+\end{figure}
+
+\textbf{INSERIR TEXTO DE INTERPRETAÇÃO}
+
+\subsection{Análise de Estabilidade}
+
+\ref{fig:dist_inst_padrao} \ref{fig:dist_inst_L2}
+
+\begin{figure}[H]
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includesvg[width=\linewidth]{figuras/Padrão/Distribuição de Instabilidade}
+        \caption{Sem regularização}
+        \label{fig:dist_inst_padrao}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includesvg[width=\linewidth]{figuras/Regressão L2/Distribuição de Instabilidade_L2}
+        \caption{Com regularização}
+        \label{fig:dist_inst_L2}
+    \end{subfigure}
+    \caption{Quantidade de Usinas por Razão de Instabilidade}
+    \label{fig:dist_instab}
+\end{figure}
+
+
+
+
+\subsection{Relação entre Métricas}
+
+\begin{figure}[H]
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includesvg[width=\linewidth]{figuras/Padrão/MAE x Instabilidade}
+        \caption{Sem regularização}
+        \label{fig:dist_inst_padrao}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includesvg[width=\linewidth]{figuras/Regressão L2/MAE x Instabilidade_L2}
+        \caption{Com regularização}
+        \label{fig:dist_inst_L2}
+    \end{subfigure}
+    \caption{Relação entre MAE e Instabilidade}
+    \label{fig:mae_X_inst}
+\end{figure}
+
+
+\begin{figure}[H]
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includesvg[width=\linewidth]{figuras/Padrão/MAE x MSE}
+        \caption{Sem regularização}
+        \label{fig:dist_inst_padrao}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includesvg[width=\linewidth]{figuras/Regressão L2/MAE x MSE_L2}
+        \caption{Com regularização}
+        \label{fig:dist_inst_L2}
+    \end{subfigure}
+    \caption{Relação entre MAE e MSE}
+    \label{fig:mae_X_mse}
+\end{figure}
+
+
+\section{Síntese e Discussão}
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{2}
+    \begin{tabular}{|ccc|}
+    \hline
+    \multicolumn{1}{|c|}{\textbf{Métrica}}                                & \multicolumn{1}{c|}{\textbf{Valor}} & \textbf{\% do Total} \\ \hline
+    \multicolumn{1}{|c|}{TOTAL DE USINAS}                                 & \multicolumn{1}{c|}{39}             & -                    \\ \hline
+    \multicolumn{3}{|c|}{}                                                                                                             \\ \hline
+    \multicolumn{1}{|c|}{\textbf{MAE \ac{tCO$_2$e}/h}} & \multicolumn{1}{c|}{}               &                      \\ \hline
+    \multicolumn{1}{|c|}{Média}                                           & \multicolumn{1}{c|}{7,99}           & -                    \\ \hline
+    \multicolumn{1}{|c|}{Mediana}                                         & \multicolumn{1}{c|}{3,22}           & -                    \\ \hline
+    \multicolumn{1}{|c|}{Desvio Padrão}                                   & \multicolumn{1}{c|}{10,11}          & -                    \\ \hline
+    \multicolumn{1}{|c|}{Mínimo}                                          & \multicolumn{1}{c|}{0,021}          & -                    \\ \hline
+    \multicolumn{1}{|c|}{Máximo}                                          & \multicolumn{1}{c|}{38,46}          & -                    \\ \hline
+    \multicolumn{3}{|c|}{}                                                                                                             \\ \hline
+    \multicolumn{1}{|c|}{\textbf{DESEMPENHO}}                             & \multicolumn{1}{c|}{}               &                      \\ \hline
+    \multicolumn{1}{|c|}{MAE \textless 10}                                & \multicolumn{1}{c|}{29}             & 74,4\%               \\ \hline
+    \multicolumn{1}{|c|}{MAE \textless 100}                               & \multicolumn{1}{c|}{39}             & 100,0\%              \\ \hline
+    \multicolumn{3}{|c|}{}                                                                                                             \\ \hline
+    \multicolumn{1}{|c|}{\textbf{PROBLEMÁTICAS}}                                   & \multicolumn{1}{c|}{}               &                      \\ \hline
+    \multicolumn{1}{|c|}{MAE \textgreater 1000}                           & \multicolumn{1}{c|}{0}              & 0,0\%                \\ \hline
+    \multicolumn{1}{|c|}{MAE \textgreater 10000}                          & \multicolumn{1}{c|}{0}              & 0,0\%                \\ \hline
+    \end{tabular}
+    \caption{Resumo Estatístico - Sem Regularização}
+\end{table}
+
+
+
+\begin{table}[]
+    \centering
+    \renewcommand{\arraystretch}{2}
+    \begin{tabular}{|ccc|}
+    \hline
+    \multicolumn{1}{|c|}{\textbf{Métrica}}                                & \multicolumn{1}{c|}{\textbf{Valor}} & \textbf{\% do Total} \\ \hline
+    \multicolumn{1}{|c|}{TOTAL DE USINAS}                                 & \multicolumn{1}{c|}{39}             & -                    \\ \hline
+    \multicolumn{3}{|c|}{}                                                                                                             \\ \hline
+    \multicolumn{1}{|c|}{\textbf{MAE \ac{tCO$_2$e}/h}} & \multicolumn{1}{c|}{}               &                      \\ \hline
+    \multicolumn{1}{|c|}{Média}                                           & \multicolumn{1}{c|}{5,19}           & -                    \\ \hline
+    \multicolumn{1}{|c|}{Mediana}                                         & \multicolumn{1}{c|}{2,94}           & -                    \\ \hline
+    \multicolumn{1}{|c|}{Desvio Padrão}                                   & \multicolumn{1}{c|}{6,47}           & -                    \\ \hline
+    \multicolumn{1}{|c|}{Mínimo}                                          & \multicolumn{1}{c|}{0,098}          & -                    \\ \hline
+    \multicolumn{1}{|c|}{Máximo}                                          & \multicolumn{1}{c|}{30,8}           & -                    \\ \hline
+    \multicolumn{3}{|c|}{}                                                                                                             \\ \hline
+    \multicolumn{1}{|c|}{\textbf{DESEMPENHO}}                             & \multicolumn{1}{c|}{}               &                      \\ \hline
+    \multicolumn{1}{|c|}{MAE \textless 10}                                & \multicolumn{1}{c|}{31}             & 79,5\%               \\ \hline
+    \multicolumn{1}{|c|}{MAE \textless 100}                               & \multicolumn{1}{c|}{39}             & 100,0\%              \\ \hline
+    \multicolumn{3}{|c|}{}                                                                                                             \\ \hline
+    \multicolumn{1}{|c|}{\textbf{PROBLEMÁTICAS}}                                   & \multicolumn{1}{c|}{}               &                      \\ \hline
+    \multicolumn{1}{|c|}{MAE \textgreater 1000}                           & \multicolumn{1}{c|}{0}              & 0,0\%                \\ \hline
+    \multicolumn{1}{|c|}{MAE \textgreater 10000}                          & \multicolumn{1}{c|}{0}              & 0,0\%                \\ \hline
+    \end{tabular}
+    \caption{Resumo Estatístico - Com Regularização}
+\end{table}
