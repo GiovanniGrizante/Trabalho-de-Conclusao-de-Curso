@@ -1,820 +1,130 @@
-\chapter{Título do Apêndice 1}\label{chp:app}
+\chapter{Apêndice A - Pseudocódigos}\label{chp:app}
 
-\captionof{listing}{Categorização das Gerações}
+\section*{Observação}
+
+Os pseudocódigos a seguir apresentam a lógica essencial dos algoritmos implementados. Detalhes de implementação específicos (como tratamento de exceções, escrita de arquivos e operações de I/O) foram omitidos para maior clareza. As versões completas estão disponíveis no repositório do projeto.
+
+\section{Classificação das Categorias de Geração}
+
+O algoritmo abaixo agrupa os valores de geração horária em categorias com base na proximidade relativa (15\%), conforme descrito na Seção 3.4.1 da Metodologia.
+
 \begin{Verbatim}[breaklines=true, frame=single]
-ALGORITMO agrupar_geracao
-ENTRADA: geracao (lista de valores), limiar (float, opcional = 15)
-SAÍDA: grupos (lista de grupos formados), categorias_iniciais (lista de IDs)
-
-INÍCIO
-    categorias <- lista vazia
-    grupos <- lista vazia
-    proximo_id <- 1
+ALGORITMO classificar_categorias(geracao, limiar=15%)
     
     // Primeira passagem: agrupamento inicial
-    PARA i DE 0 ATÉ tamanho(geracao) - 1:
-        valor <- geracao[i]
-        
-        SE valor <= 20 ENTÃO
-            valor <- 0
-        
-        SE i == 0 ENTÃO
-            lim_inf <- valor * (1 - limiar/100)
-            lim_sup <- valor * (1 + limiar/100)
-            
-            grupo <- {
-                id: proximo_id,
-                media: valor,
-                limite_inferior: lim_inf,
-                limite_superior: lim_sup,
-                valores: [valor]
-            }
-            
-            adicionar grupo em grupos
-            adicionar proximo_id em categorias
-            proximo_id <- proximo_id + 1
-        
+    PARA CADA valor EM geracao:
+        SE valor <= 20 MW ENTÃO
+            categorias[i] <- 0
         SENÃO
-            grupos_validos <- lista vazia
-            
-            PARA CADA grupo EM grupos:
-                SE grupo.limite_inferior <= valor <= grupo.limite_superior ENTÃO
-                    SE grupo.media != 0 ENTÃO
-                        distancia <- |valor - grupo.media| / grupo.media * 100
-                    SENÃO
-                        distancia <- |valor| * 100
-                    
-                    adicionar (grupo, distancia) em grupos_validos
-            
-            SE grupos_validos NÃO está vazio ENTÃO
-                ordenar grupos_validos por distancia (crescente)
-                grupo_escolhido <- grupos_validos[0].grupo
-                
-                adicionar valor em grupo_escolhido.valores
-                nova_media <- soma(grupo_escolhido.valores) / tamanho(grupo_escolhido.valores)
-                grupo_escolhido.media <- nova_media
-                grupo_escolhido.limite_inferior <- nova_media * (1 - limiar/100)
-                grupo_escolhido.limite_superior <- nova_media * (1 + limiar/100)
-                
-                adicionar grupo_escolhido.id em categorias
-            
-            SENÃO
-                lim_inf <- valor * (1 - limiar/100)
-                lim_sup <- valor * (1 + limiar/100)
-                
-                grupo <- {
-                    id: proximo_id,
-                    media: valor,
-                    limite_inferior: lim_inf,
-                    limite_superior: lim_sup,
-                    valores: [valor]
-                }
-                
-                adicionar grupo em grupos
-                adicionar proximo_id em categorias
-                proximo_id <- proximo_id + 1
-            FIM SE
-        FIM SE
-    FIM PARA
+            grupo <- buscar_grupo_por_limite(valor, grupos, limiar)
+            SE grupo NAO encontrado ENTÃO
+                grupo <- criar_novo_grupo(valor)
+                adicionar grupo a grupos
+            categorias[i] <- grupo.id
     
-    // Segunda fase: mesclar grupos sobrepostos
+    // Segunda passagem: mesclar grupos sobrepostos
     REPETIR
-        houve_mesclagem <- FALSO
-        grupos_ordenados <- ordenar grupos por media (crescente)
-        novos_grupos <- lista vazia
-        
-        i <- 0
-        ENQUANTO i < tamanho(grupos_ordenados):
-            grupo_atual <- copia(grupos_ordenados[i])
-            j <- i + 1
-            
-            ENQUANTO j < tamanho(grupos_ordenados):
-                proximo_grupo <- grupos_ordenados[j]
-                
-                SE grupo_atual.limite_inferior <= proximo_grupo.limite_superior E 
-                   proximo_grupo.limite_inferior <= grupo_atual.limite_superior ENTÃO
-                    
-                    adicionar todos valores de proximo_grupo em grupo_atual.valores
-                    nova_media <- soma(grupo_atual.valores) / tamanho(grupo_atual.valores)
-                    grupo_atual.media <- nova_media
-                    grupo_atual.limite_inferior <- nova_media * (1 - limiar/100)
-                    grupo_atual.limite_superior <- nova_media * (1 + limiar/100)
-                    grupo_atual.id <- minimo(grupo_atual.id, proximo_grupo.id)
-                    
-                    houve_mesclagem <- VERDADEIRO
-                    j <- j + 1
-                SENÃO
-                    INTERROMPER loop
-                FIM SE
-            
-            adicionar grupo_atual em novos_grupos
-            i <- j
-        
-        grupos <- novos_grupos
-    ATÉ houve_mesclagem = FALSO
+        PARA CADA par de grupos sobrepostos:
+            mesclar_grupos(grupo1, grupo2)
+    ATÉ nenhuma mesclagem ocorrer
     
     // Renomear IDs sequencialmente
-    grupos_ordenados <- ordenar grupos por media (crescente)
-    PARA idx DE 1 ATÉ tamanho(grupos_ordenados):
-        grupos_ordenados[idx-1].id <- idx
+    PARA CADA grupo EM grupos_ordenados:
+        grupo.id <- indice_sequencial
     
-    RETORNAR grupos_ordenados, categorias
-
-FIM ALGORITMO
+    RETORNAR categorias
 \end{Verbatim}
+\captionof{listing}{Categorização das Gerações}
 
+\section{Identificação de Transições}
+
+O algoritmo identifica horas em transição utilizando uma janela deslizante de 3 horas anteriores e 3 horas posteriores, conforme Seção 3.4.2.
+
+\begin{Verbatim}[breaklines=true, frame=single]
+ALGORITMO identificar_transicoes(categorias, janela=3)
+    
+    PARA i DE janela ATÉ tamanho(categorias)-janela-1:
+        vizinhos <- categorias[i-janela : i] + categorias[i+1 : i+janela+1]
+        moda <- valor_mais_frequente(vizinhos)
+        
+        SE categorias[i] != moda ENTÃO
+            transicoes[i] <- 1
+        SENÃO
+            transicoes[i] <- 0
+    
+    RETORNAR transicoes
+\end{Verbatim}
 \captionof{listing}{Identificação de Transições}
+
+\section{Modelo de Otimização AMPL}
+
+O modelo AMPL implementa a minimização da Equação (3.2) com regularização L2.
+
 \begin{Verbatim}[breaklines=true, frame=single]
-    ALGORITMO identificar_transicoes_e_exportar
-ENTRADA: usina (string), geracao (lista de valores), grupos (lista de grupos), 
-         categorias_iniciais (lista de IDs), limiar (float, opcional = 15)
-SAÍDA: categorias_finais (lista de inteiros)
+# Conjuntos
+set ANO;
+set HORARIO{ANO};
 
-INÍCIO
-    n <- tamanho(geracao)
-    
-    // Reclassificar todos os valores baseado nos grupos finais
-    novas_categorias <- lista vazia
-    
-    PARA CADA valor_original EM geracao:
-        valor <- SE valor_original <= 20 ENTÃO 0 SENÃO valor_original
-        
-        grupo_encontrado <- NULO
-        PARA CADA grupo EM grupos:
-            SE grupo.limite_inferior <= valor <= grupo.limite_superior ENTÃO
-                grupo_encontrado <- grupo
-                INTERROMPER loop
-        
-        SE grupo_encontrado != NULO ENTÃO
-            novo_id <- grupo_encontrado.id
-        SENÃO
-            grupo_mais_proximo <- grupo em grupos com mínimo |grupo.media - valor|
-            novo_id <- grupo_mais_proximo.id
-        
-        adicionar novo_id em novas_categorias
-    
-    // Identificar pontos de transição usando janela deslizante
-    categorias_finais <- copia(novas_categorias)
-    
-    PARA i DE 0 ATÉ n-1:
-        SE categorias_finais[i] == 0 ENTÃO
-            CONTINUAR
-        
-        // Coletar até 3 categorias anteriores
-        categorias_anteriores <- lista vazia
-        PARA j DE max(0, i-3) ATÉ i-1:
-            adicionar novas_categorias[j] em categorias_anteriores
-        
-        // Coletar até 3 categorias posteriores
-        categorias_posteriores <- lista vazia
-        PARA j DE i+1 ATÉ min(n-1, i+3):
-            adicionar novas_categorias[j] em categorias_posteriores
-        
-        SE tamanho(categorias_anteriores) == 0 OU tamanho(categorias_posteriores) == 0 ENTÃO
-            CONTINUAR
-        
-        cat_atual <- novas_categorias[i]
-        
-        // Contar categorias diferentes
-        diferentes_anteriores <- 0
-        PARA CADA cat EM categorias_anteriores:
-            SE cat != cat_atual ENTÃO
-                diferentes_anteriores <- diferentes_anteriores + 1
-        
-        diferentes_posteriores <- 0
-        PARA CADA cat EM categorias_posteriores:
-            SE cat != cat_atual ENTÃO
-                diferentes_posteriores <- diferentes_posteriores + 1
-        
-        // Verificar se é ponto de transição
-        SE diferentes_anteriores > tamanho(categorias_anteriores)/2 E 
-           diferentes_posteriores > tamanho(categorias_posteriores)/2 ENTÃO
-            
-            valor_atual <- SE geracao[i] <= 20 ENTÃO 0 SENÃO geracao[i]
-            
-            // Calcular média dos valores anteriores
-            valores_anteriores <- lista vazia
-            PARA j DE max(0, i-3) ATÉ i-1:
-                v <- geracao[j]
-                SE v > 20 OU v == 0 ENTÃO
-                    adicionar v em valores_anteriores
-            
-            SE valores_anteriores NÃO vazio ENTÃO
-                media_anterior <- soma(valores_anteriores) / tamanho(valores_anteriores)
-            SENÃO
-                media_anterior <- valor_atual
-            
-            // Calcular média dos valores posteriores
-            valores_posteriores <- lista vazia
-            PARA j DE i+1 ATÉ min(n-1, i+3):
-                v <- geracao[j]
-                SE v > 20 OU v == 0 ENTÃO
-                    adicionar v em valores_posteriores
-            
-            SE valores_posteriores NÃO vazio ENTÃO
-                media_posterior <- soma(valores_posteriores) / tamanho(valores_posteriores)
-            SENÃO
-                media_posterior <- valor_atual
-            
-            // Calcular diferenças percentuais
-            diff_anterior <- |valor_atual - media_anterior| / max(|media_anterior|, 1) * 100
-            diff_posterior <- |valor_atual - media_posterior| / max(|media_posterior|, 1) * 100
-            
-            SE diff_anterior > limiar E diff_posterior > limiar ENTÃO
-                categorias_finais[i] <- 0
-    
-    // Criar diretório de saída
-    dir <- caminho_join('Usinas', usina, 'Infos de Geração')
-    SE diretorio NÃO existe ENTÃO
-        criar_diretorio(dir)
-    
-    // Gerar arquivo com informações dos grupos
-    dados_grupos <- lista vazia
-    PARA CADA grupo EM grupos (ordenados por media crescente):
-        qtd <- 0
-        PARA i DE 0 ATÉ n-1:
-            SE categorias_finais[i] == grupo.id ENTÃO
-                qtd <- qtd + 1
-        
-        adicionar em dados_grupos: {
-            'Grupo': grupo.id,
-            'Média': arredondar(grupo.media, 2),
-            'Limite Inferior': arredondar(grupo.limite_inferior, 2),
-            'Limite Superior': arredondar(grupo.limite_superior, 2),
-            'Registros': qtd
-        }
-    
-    salvar_parquet(dados_grupos, caminho_join(dir, 'Grupos de Geração.parquet'))
-    
-    // Gerar arquivo com os pontos de transição
-    dados_transicao <- lista vazia
-    PARA i DE 0 ATÉ n-1:
-        SE categorias_finais[i] == 0 ENTÃO
-            adicionar em dados_transicao: {
-                'Índice': i,
-                'Geração': arredondar(geracao[i], 3)
-            }
-    
-    salvar_parquet(dados_transicao, caminho_join(dir, 'Transições de Geração.parquet'))
-    
-    RETORNAR categorias_finais
+# Parâmetros
+param H{ANO};                      # horas por ano
+param E_real{ANO};                 # emissões anuais IEMA
+param P{ANO, HORARIO};             # geração horária (MW / 100)
 
-FIM ALGORITMO
+# Variáveis
+var alpha >= 0;
+var beta;
+var gamma >= 0;
+var omega >= 0;
+var mu <= 0.5;
+
+# Emissão horária
+var E_horaria{a in ANO, h in HORARIO[a]} =
+    alpha * P[a,h]^2 + beta * P[a,h] + gamma + omega * exp(mu * P[a,h]);
+
+# Função objetivo (MSE)
+minimize MSE:
+    (1 / sum{a in ANO} H[a]) * sum{a in ANO} ( sum{h in HORARIO[a]} E_horaria[a,h] - E_real[a] )^2;
+
+# Com regularização L2 (opcional)
+# minimize MSE_L2: MSE + lambda * (alpha^2 + beta^2 + gamma^2 + omega^2 + mu^2);
 \end{Verbatim}
+\captionof{listing}{Modelo AMPL para Calibração}
 
-\captionof{listing}{Modelo AMPL}
+\section{Treinamento da Rede Neural}
+
+O algoritmo de treinamento implementa early stopping, gradient clipping e ponderação para transições.
+
 \begin{Verbatim}[breaklines=true, frame=single]
-ALGORITMO modelo_regressao_emissoes
-
-// =================
-// DECLARAÇÃO DE CONJUNTOS
-// =================
-
-CONJUNTO ANO
-CONJUNTO HORARIO[a] para cada a em ANO, ordenado: 0 até H[a]
-
-// =================
-// DECLARAÇÃO DE PARÂMETROS
-// =================
-
-PARÂMETRO H[ANO]                  // Número de horas por ano
-PARÂMETRO emissoes[ANO]           // Emissões anuais em kg CO2e
-PARÂMETRO pg[ANO, HORARIO]        // Geração por ano e hora
-
-PARÂMETRO S_base <- 100           // Base para escala (não utilizado explicitamente)
-PARÂMETRO lambda <- 30            // Parâmetro de regularização L2
-
-// =================
-// DECLARAÇÃO DE VARIÁVEIS
-// =================
-
-// Variáveis para regressão padrão
-VAR Alpha >= 0                     // Coeficiente quadrático (cargas muito altas)
-VAR Beta                           // Coeficiente linear (eficiência em carga parcial)
-VAR Gamma                          // Termo constante
-VAR Omega                          // Amplitude do termo exponencial
-VAR Mu                             // Taxa de crescimento exponencial
-
-// Variáveis para regressão com regularização L2
-VAR Alpha_L2 >= 0
-VAR Beta_L2
-VAR Gamma_L2
-VAR Omega_L2
-VAR Mu_L2
-
-// Variáveis derivadas (emissões horárias estimadas)
-VAR Emissao_horaria[ANO, HORARIO] =
-    Alpha * pg[a,h]^2
-    + Beta * pg[a,h]
-    + Gamma
-    + Omega * exp(Mu * pg[a,h])
-
-VAR Emissao_horaria_L2[ANO, HORARIO] =
-    Alpha_L2 * pg[a,h]^2
-    + Beta_L2 * pg[a,h]
-    + Gamma_L2
-    + Omega_L2 * exp(Mu_L2 * pg[a,h])
-
-// =================
-// RESTRIÇÕES FÍSICAS
-// =================
-
-// Restrição 1: Emissões horárias nunca negativas
-PARA CADA a em ANO:
-    PARA CADA h em HORARIO[a]:
-        SUJEITO A Emissao_nao_negativa[a,h]:
-            Alpha * pg[a,h]^2
-            + Beta * pg[a,h]
-            + Gamma
-            + Omega * exp(Mu * pg[a,h]) >= 0
-
-        SUJEITO A Emissao_nao_negativa_L2[a,h]:
-            Alpha_L2 * pg[a,h]^2
-            + Beta_L2 * pg[a,h]
-            + Gamma_L2
-            + Omega_L2 * exp(Mu_L2 * pg[a,h]) >= 0
-
-// Restrição 2: Emissão zero quando geração é zero
-SUJEITO A Emissao_no_zero:
-    Gamma + Omega >= 0
-
-SUJEITO A Emissao_no_zero_L2:
-    Gamma_L2 + Omega_L2 >= 0
-
-// =================
-// FUNÇÕES OBJETIVO
-// =================
-
-// Objetivo 1: MSE (Erro Quadrático Médio) - Regressão padrão
-FUNCAO_OBJETIVO MSE:
-    MINIMIZAR (1 / SOMA_{a em ANO} |HORARIO[a]|) 
-    * SOMA_{a em ANO} (SOMA_{h em HORARIO[a]} Emissao_horaria[a,h] - emissoes[a])^2
-
-// Objetivo 2: MSE com regularização L2
-FUNCAO_OBJETIVO MSE_L2:
-    MINIMIZAR (1 / SOMA_{a em ANO} |HORARIO[a]|)
-    * SOMA_{a em ANO} (SOMA_{h em HORARIO[a]} Emissao_horaria_L2[a,h] - emissoes[a])^2
-    + lambda * (Alpha_L2^2 + Beta_L2^2 + Gamma_L2^2 + Omega_L2^2 + Mu_L2^2)
-
-// =================
-// DEFINIÇÃO DOS PROBLEMAS
-// =================
-
-PROBLEMA Regressao_Estatica:
-    FUNCAO_OBJETIVO: MSE
-    VARIÁVEIS: Emissao_horaria, Alpha, Beta, Gamma, Omega, Mu
-    RESTRIÇÕES: Emissao_nao_negativa, Emissao_no_zero
-
-PROBLEMA Regressao_Estatica_L2:
-    FUNCAO_OBJETIVO: MSE_L2
-    VARIÁVEIS: Emissao_horaria_L2, Alpha_L2, Beta_L2, Gamma_L2, Omega_L2, Mu_L2
-    RESTRIÇÕES: Emissao_nao_negativa_L2, Emissao_no_zero_L2
-
-FIM ALGORITMO
-\end{Verbatim}
-
-\captionof{listing}{Geração das Emissões Sintéticas}
-\begin{Verbatim}[breaklines=true, frame=single]
-ALGORITMO geracao_sinteticas
-SAÍDA: Arquivos Parquet salvos em disco (sem retorno explícito)
-
-INÍCIO
-
-    // ==================== INICIALIZAÇÃO ====================
+ALGORITMO treinar_mlp(X_train, y_train, X_val, y_val, transicao_train)
     
-    horas <- dicionário vazio
-    anos <- listar arquivos no diretório 'IEMA/Tabelas'
-    remover 'desktop.ini' do conjunto
-    para cada arquivo, remover extensão (ex: '.parquet')
-    ordenar anos em ordem crescente
+    modelo <- MLP(camadas=[128, 64, 32], dropout=0.3)
+    optimizer <- Adam(lr=1e-3)
+    loss_fn <- HuberLoss(delta=0.5)
     
-    // Calcular horas por ano (considerando anos bissextos)
-    PARA CADA ano EM anos:
-        converter ano para inteiro
-        SE ano % 4 == 0 ENTÃO
-            horas[ano] <- 8784    // Ano bissexto (366 dias)
-        SENÃO
-            horas[ano] <- 8760    // Ano normal (365 dias)
-        FIM SE
-    FIM PARA
+    melhor_loss <- infinito
+    paciencia <- 0
     
-    // ==================== PROCESSAMENTO POR USINA ====================
-    
-    PARA CADA usina EM listar_diretorios('Usinas'):
-        
-        // Carregar dados de geração da usina
-        caminho_pg <- caminho('Usinas', usina, 'Dados Externos', 'ONS.parquet')
-        PG <- ler_parquet(caminho_pg)['Geração']  // Array/Series de geração
-        
-        pastas <- ['Padrão', 'Regressão L2']
-        
-        // ==================== CÁLCULO DE EMISSÕES SINTÉTICAS ====================
-        
-        PARA CADA pasta EM pastas:
-            
-            caminho_coeficientes <- caminho('Usinas', usina, 'Minimização', 
-                                           pasta, 'Emissões', 'Coeficientes.parquet')
-            
-            SE arquivo_existe(caminho_coeficientes) ENTÃO
-                
-                // Carregar tabela de coeficientes
-                tab <- ler_parquet(caminho_coeficientes)
-                
-                // Extrair coeficientes da equação
-                alpha <- valor de tab onde Coeficientes == 'Alpha'
-                beta  <- valor de tab onde Coeficientes == 'Beta'
-                gamma <- valor de tab onde Coeficientes == 'Gamma'
-                omega <- valor de tab onde Coeficientes == 'Omega'
-                mu    <- valor de tab onde Coeficientes == 'Mu'
-                
-                // Calcular emissões horárias sintéticas
-                // Equação: emissão = $alpha$*(PG/100)² + $beta$*(PG/100) + $gamma$ + $omega$*e^($mu$*(PG/100))
-                emissao <- lista vazia
-                
-                PARA k DE 0 ATÉ comprimento(PG) - 1:
-                    pg_normalizado <- PG[k] / 100
-                    
-                    termo_quadratico <- alpha * (pg_normalizado^2)
-                    termo_linear    <- beta * pg_normalizado
-                    termo_constante <- gamma
-                    termo_exponencial <- omega * exp(mu * pg_normalizado)
-                    
-                    valor_emissao <- termo_quadratico + termo_linear + 
-                                    termo_constante + termo_exponencial
-                    
-                    adicionar arredondar(valor_emissao, 3) em emissao
-                FIM PARA
-                
-                // ==================== CRIAÇÃO DO DATAFRAME HORÁRIO ====================
-                
-                horas_expandidas <- lista vazia
-                anos_expandidos <- lista vazia
-                
-                // Expandir horas e anos para cada período
-                PARA CADA ano EM anos:
-                    inicio <- 0
-                    num_horas <- horas[ano]
-                    
-                    // Adicionar índices de 0 até num_horas-1
-                    horas_expandidas.extend(lista de 0 até num_horas-1)
-                    
-                    // Adicionar o ano repetido num_horas vezes
-                    anos_expandidos.extend([ano] * num_horas)
-                FIM PARA
-                
-                // Criar DataFrame com dados horários
-                df_horario <- DataFrame({
-                    'Ano': anos_expandidos,
-                    'Índice': horas_expandidas,
-                    'Emissão': emissao
-                })
-                
-                // Salvar arquivo de emissões horárias
-                caminho_horario <- caminho('Usinas', usina, 'Minimização', 
-                                          pasta, 'Emissões', 'Horárias.parquet')
-                salvar_parquet(df_horario, caminho_horario, index=FALSO)
-                
-                // ==================== CÁLCULO DE EMISSÕES ANUAIS ====================
-                
-                // Agrupar por ano e somar emissões
-                df_anual <- df_horario.agrupar_por('Ano')['Emissão'].somar()
-                df_anual <- resetar_index(df_anual)
-                
-                // Carregar emissões reais do IEMA
-                caminho_iema <- caminho('Usinas', usina, 'Dados Externos', 'IEMA.parquet')
-                iema <- ler_parquet(caminho_iema)['Emissões']
-                emissoes_reais <- converter_para_lista(iema)
-                
-                // Obter emissões anuais sintéticas
-                emissoes_sinteticas <- df_anual['Emissão'].converter_para_lista()
-                
-                // Calcular K_i = Emissão_Sintética / Emissão_Real
-                valores_ki <- lista vazia
-                
-                PARA j DE 0 ATÉ comprimento(emissoes_sinteticas) - 1:
-                    ki <- emissoes_sinteticas[j] / emissoes_reais[j]
-                    adicionar arredondar(ki, 3) em valores_ki
-                FIM PARA
-                
-                // Adicionar coluna K_i ao DataFrame anual
-                df_anual['K_i'] <- valores_ki
-                
-                // Salvar arquivo de emissões anuais
-                caminho_anual <- caminho('Usinas', usina, 'Minimização', 
-                                        pasta, 'Emissões', 'Anuais.parquet')
-                salvar_parquet(df_anual, caminho_anual, index=FALSO)
-                
-            FIM SE
-            
-        FIM PARA
-        
-    FIM PARA
-
-FIM ALGORITMO
-\end{Verbatim}
-
-\captionof{listing}{Preparação das \emph{Features} da Rede Neural}
-\begin{Verbatim}[breaklines=true, frame=single]
-ALGORITMO tratamento_dados
-ENTRADA: iema_recente (DataFrame)
-SAÍDA: nenhum retorno explícito (salva arquivos em disco)
-
-INÍCIO
-    // Definir pastas a processar baseado no tipo de previsão
-    pastas <- ['Padrão', 'Regressão L2']
-    
-    // Processar cada usina
-    PARA CADA usina EM listar_diretorios('Usinas'):
-        
-        PARA CADA pasta EM pastas:
-            
-            // Carregar dados de geração e emissão
-            geracao <- ler_parquet(caminho('Usinas', usina, 'Dados Externos', 'ONS.parquet'))
-            emissao <- ler_parquet(caminho('Usinas', usina, 'Minimização', pasta, 'Emissões', 'Horárias.parquet'))
-            
-            // Carregar dados unitários (tentando por 'Usina' ou 'CEG')
-            TENTAR
-                unitarios <- iema_recente[iema_recente['Usina'] == usina]
-                remover coluna 'Usina' de unitarios
-                resetar índice de unitarios
-            EXCETO KeyError
-                unitarios <- iema_recente[iema_recente['CEG'] == usina]
-                remover coluna 'CEG' de unitarios
-                resetar índice de unitarios
-            FIM TENTAR
-            
-            // Unificar os dados
-            df <- mesclar(geracao, emissao, how='left')
-            df <- mesclar(df, unitarios, how='cross')
-            
-            // == TRANSFORMAÇÃO DAS HORAS EM VALORES CÍCLICOS ==
-            horas <- dicionário vazio
-            anos <- listar arquivos em 'IEMA/Tabelas' (excluindo 'desktop.ini')
-            remover extensão '.parquet' dos nomes
-            ordenar anos
-            
-            PARA CADA ano EM anos:
-                SE ano % 4 == 0 ENTÃO
-                    horas[ano] <- 8784
-                SENÃO
-                    horas[ano] <- 8760
-                FIM SE
-            
-            H <- mapear df['Ano'] usando dicionário horas
-            theta <- 2 * PI * df['Índice'] / H
-            
-            df['Cosseno Índice'] <- cos(theta)
-            df['Seno Índice'] <- sin(theta)
-            
-            // == FEATURES DE TRANSIÇÃO ==
-            // Duração da transição
-            transicao_list <- converter (df['Categoria de geração'] == 0) para inteiro
-            duracao <- vetor de zeros (mesmo tamanho de transicao_list)
-            contador <- 0
-            
-            PARA i DE 0 ATÉ tamanho(transicao_list) - 1:
-                SE transicao_list[i] == 1 ENTÃO
-                    contador <- contador + 1
-                SENÃO
-                    contador <- 0
-                duracao[i] <- contador
-            df['Duração da Transição'] <- duracao
-            
-            // Fase da transição
-            fase <- vetor de zeros (mesmo tamanho de transicao_list)
-            
-            PARA i DE 0 ATÉ tamanho(transicao_list) - 1:
-                SE transicao_list[i] == 1 ENTÃO  // em transição
-                    inicio <- (i == 0) OU (transicao_list[i-1] == 0)
-                    fim <- (i == tamanho(transicao_list)-1) OU (transicao_list[i+1] == 0)
-                    
-                    SE inicio E fim ENTÃO
-                        fase[i] <- 1  // transição de uma hora
-                    SENÃO SE inicio ENTÃO
-                        fase[i] <- 1  // início
-                    SENÃO SE fim ENTÃO
-                        fase[i] <- 3  // fim
-                    SENÃO
-                        fase[i] <- 2  // meio
-                    FIM SE
-                FIM SE
-            df['Fase da Transição'] <- fase
-            
-            // Separar dados em treino, validação e teste
-            removidas <- ['Delta menos', 'Delta mais', 'Índice']
-            adicionar 'Ano' a removidas
-            FIM SE
-            
-            ano_divisao <- 2023
-            
-            x_tr <- df[df['Ano'] < ano_divisao]
-            resetar índice de x_tr
-            remover colunas removidas de x_tr
-            
-            x_val <- df[df['Ano'] == ano_divisao]
-            resetar índice de x_val
-            remover colunas removidas de x_val
-            
-            x_te <- df[df['Ano'] > ano_divisao]
-            resetar índice de x_te
-            remover colunas removidas de x_te
-            
-            // Definir colunas categóricas e numéricas
-            categoricas <- ['Categoria de geração']
-            numericas <- ['Geração', 'Duração da Transição', 'Fase da Transição']
-            
-            // Configurar transformador de colunas
-            transf <- ColumnTransformer([
-                ('onehot', OneHotEncoder(sparse_output=FALSO, handle_unknown='ignore'), categoricas),
-                ('scaler', StandardScaler(), numericas)
-            ], remainder='passthrough', verbose_feature_names_out=FALSO)
-            
-            // Aplicar transformações
-            data_tr <- transf.fit_transform(x_tr)
-            data_val <- transf.transform(x_val)
-            data_te <- transf.transform(x_te)
-            
-            // Criar DataFrames finais
-            df_tr <- DataFrame(data_tr, colunas = transf.get_feature_names_out())
-            df_val <- DataFrame(data_val, colunas = transf.get_feature_names_out())
-            df_te <- DataFrame(data_te, colunas = transf.get_feature_names_out())
-            
-            // Extrair scaler para coluna 'Geração'
-            scaler <- transf.named_transformers_['scaler']
-            idx_pg <- posição de 'Geração' em numericas
-            
-            df_norm <- DataFrame({
-                'Variável': ['Geração'],
-                'Mean': [scaler.mean_[idx_pg]],
-                'Std': [scaler.scale_[idx_pg]]
-            })
-            
-            // Definir diretório de saída
-            dir <- caminho('Usinas', usina, 'Minimização', pasta, 'Rede Neural', 'Dados')
-            
-            // Criar diretório se não existir
-            criar_diretorio(dir, exist_ok=VERDADEIRO)
-            
-            // Salvar DataFrames
-            salvar_parquet(df_tr, caminho(dir, 'Treino.parquet'), index=FALSO)
-            salvar_parquet(df_val, caminho(dir, 'Validação.parquet'), index=FALSO)
-            salvar_parquet(df_te, caminho(dir, 'Teste.parquet'), index=FALSO)
-            salvar_parquet(df_norm, caminho(dir, 'Scaler Geração.parquet'), index=FALSO)
-            
-        FIM PARA
-    FIM PARA
-
-FIM ALGORITMO
-\end{Verbatim}
-
-\captionof{listing}{Treinamento da Rede Neural}
-\begin{Verbatim}[breaklines=true, frame=single]
-ALGORITMO treinar_modelo
-ENTRADA: 
-    model (rede neural)
-    train_loader (dados de treino)
-    val_loader (dados de validação)
-    dyn_cols (colunas dinâmicas)
-    epochs (inteiro, padrão = 100)
-    patience (inteiro, padrão = 50)
-    huber_delta (float, padrão = 0.5)
-    peso_transicao (float, padrão = 8.0)
-    clip_grad (float, padrão = 1.0)
-
-SAÍDA:
-    model (modelo treinado)
-    history (dicionário com histórico de métricas)
-
-INÍCIO
-    // Mover modelo para dispositivo (CPU/GPU)
-    model <- mover_para_device(model, device)
-    
-    // Configurar otimizador e funções de perda
-    optimizer <- Adam(model.parameters(), lr=0.001)
-    criterion_huber <- HuberLoss(delta=huber_delta)
-    criterion_mae <- L1Loss()
-    criterion_mse <- MSELoss()
-    
-    // Configurar scheduler para reduzir learning rate
-    scheduler <- ReduceLROnPlateau(optimizer, mode='min', factor=0.5, 
-                                   patience=5, min_lr=0.00001)
-    
-    // Inicializar variáveis de controle
-    best_val_loss <- infinito
-    patience_counter <- 0
-    best_model_state <- None
-    history <- {
-        'loss': [], 'mae': [], 'mse': [],
-        'val_loss': [], 'val_mae': [], 'val_mse': []
-    }
-    
-    // Loop de épocas
-    PARA epoch DE 1 ATÉ epochs:
-        
-        // === FASE DE TREINAMENTO ===
-        model.treino()
-        train_loss <- 0.0
-        train_mae <- 0.0
-        train_mse <- 0.0
-        
-        PARA CADA (x_dyn, x_sta, y) EM train_loader:
-            // Mover dados para o dispositivo
-            x_dyn <- mover_para_device(x_dyn, device)
-            x_sta <- mover_para_device(x_sta, device)
-            y <- mover_para_device(y, device)
-            y <- squeeze(y)  // Remover dimensões extras
-            
-            // Zerar gradientes
-            optimizer.zerar_gradientes()
-            
-            // Forward pass
-            output <- model(x_dyn, x_sta)
-            
-            // Calcular perda base (Huber)
-            loss_data <- criterion_huber(output, y)
-            
-            // Aplicar pesos para transições
-            is_transicao <- (x_sta[:, 0] == 1)
-            weight <- onde(is_transicao, peso_transicao, 1.0)
-            loss <- media(loss_data * weight)
-            
-            // Backward pass
+    PARA epoch DE 1 ATÉ max_epocas:
+        // Treinamento
+        PARA CADA (x, y, is_trans) EM batches(X_train, y_train, transicao_train):
+            y_pred <- modelo(x)
+            loss <- media(loss_fn(y_pred, y) * (1 + 4*is_trans))  # peso 5 para transições
             loss.backward()
-            
-            // Clip gradients para evitar explosão
-            clip_grad_norm_(model.parameters(), max_norm=clip_grad)
-            
-            // Atualizar pesos
+            clip_grad_norm_(modelo.parameters(), max_norm=1.0)
             optimizer.step()
-            
-            // Acumular métricas
-            train_loss <- train_loss + loss.item()
-            train_mae <- train_mae + media(criterion_mae(output, y)).item()
-            train_mse <- train_mse + media(criterion_mse(output, y)).item()
         
-        // Calcular médias das métricas de treino
-        train_loss <- train_loss / tamanho(train_loader)
-        train_mae <- train_mae / tamanho(train_loader)
-        train_mse <- train_mse / tamanho(train_loader)
+        // Validação
+        loss_val <- media(loss_fn(modelo(X_val), y_val))
         
-        // === FASE DE VALIDAÇÃO ===
-        model.avaliacao()  // Modo de avaliação (sem dropout, etc.)
-        val_loss <- 0.0
-        val_mae <- 0.0
-        val_mse <- 0.0
-        
-        // Desabilitar cálculo de gradientes para validação
-        COM torch.no_grad():
-            PARA CADA (x_dyn, x_sta, y) EM val_loader:
-                x_dyn <- mover_para_device(x_dyn, device)
-                x_sta <- mover_para_device(x_sta, device)
-                y <- mover_para_device(y, device)
-                y <- squeeze(y)
-                
-                output <- model(x_dyn, x_sta)
-                
-                loss_val <- media(criterion_huber(output, y))
-                val_loss <- val_loss + loss_val.item()
-                val_mae <- val_mae + criterion_mae(output, y).item()
-                val_mse <- val_mse + criterion_mse(output, y).item()
-        
-        // Calcular médias das métricas de validação
-        val_loss <- val_loss / tamanho(val_loader)
-        val_mae <- val_mae / tamanho(val_loader)
-        val_mse <- val_mse / tamanho(val_loader)
-        
-        // Registrar histórico
-        adicionar train_loss em history['loss']
-        adicionar train_mae em history['mae']
-        adicionar train_mse em history['mse']
-        adicionar val_loss em history['val_loss']
-        adicionar val_mae em history['val_mae']
-        adicionar val_mse em history['val_mse']
-        
-        // Atualizar scheduler baseado na loss de validação
-        scheduler.step(val_loss)
-        
-        // Verificar se é o melhor modelo até agora
-        SE val_loss < best_val_loss ENTÃO
-            best_val_loss <- val_loss
-            patience_counter <- 0
-            best_model_state <- copiar(model.state_dict())
+        SE loss_val < melhor_loss ENTÃO
+            melhor_loss <- loss_val
+            paciencia <- 0
+            salvar_modelo(modelo)
         SENÃO
-            patience_counter <- patience_counter + 1
-            
-            SE patience_counter >= patience ENTÃO
-                INTERROMPER loop  // Early stopping
-            FIM SE
-        FIM SE
-        
-    FIM PARA
+            paciencia <- paciencia + 1
+            SE paciencia >= 50 ENTÃO
+                interromper  # early stopping
     
-    // Carregar o melhor modelo encontrado
-    SE best_model_state NÃO é None ENTÃO
-        model.load_state_dict(best_model_state)
-    FIM SE
-    
-    RETORNAR model, history
-
-FIM ALGORITMO
+    RETORNAR modelo_carregado
 \end{Verbatim}
+\captionof{listing}{Treinamento da MLP}
