@@ -33,6 +33,9 @@
 \usepackage{etoolbox}
 \usepackage{multicol}
 
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows, positioning}
+
 \usepackage{etoolbox}
 \AfterEndEnvironment{Verbatim}{%
     \setlength{\parindent}{17.62482pt}%
@@ -113,10 +116,10 @@
 
 % Pacotes de citações
 %\usepackage[brazilian,hyperpageref]{backref}	 % Paginas com as citações na bibl
-%\usepackage[num]{abntex2cite}	% Citações padrão ABNT numerica
-\usepackage[alf]{abntex2cite}	% Citações padrão ABNT autor/data
-%\citebrackets[]
-\citebrackets()
+\usepackage[num]{abntex2cite}	% Citações padrão ABNT numerica
+% \usepackage[alf]{abntex2cite}	% Citações padrão ABNT autor/data
+\citebrackets[]
+% \citebrackets()
 
 % remover bordas dos links
 \hypersetup{

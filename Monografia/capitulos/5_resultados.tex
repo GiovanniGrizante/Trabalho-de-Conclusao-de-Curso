@@ -2,7 +2,7 @@
 
 \section{Visão Geral dos Experimentos}
 
-Foram realizados experimentos para os dois cenários propostos na metodologia: calibração padrão e calibração com regularização L2 (\(\lambda = 30\)). Para cada cenário, calibrou-se a equação de emissão para 39 usinas termelétricas no período de 2020 a 2024, geraram-se as emissões sintéticas horárias e treinou-se uma rede neural \ac{MLP} com a arquitetura descrita na Seção 3.7. O conjunto de treinamento compreendeu os anos de 2020 a 2022, o conjunto de validação o ano de 2023, e o conjunto de teste o ano de 2024.
+Foram realizados experimentos para os dois cenários propostos na metodologia: calibração padrão e calibração com regularização L2 (\(\lambda = 30\)). Para cada cenário, calibrou-se a equação de emissão para 39 usinas termelétricas no período de 2020 a 2024, geraram-se as emissões sintéticas horárias e treinou-se um modelo de rede neural \ac{MLP} por usina, sendo a arquitetura descrita na Seção 3.7. O conjunto de treinamento compreendeu os anos de 2020 a 2022, o conjunto de validação o ano de 2023, e o conjunto de teste o ano de 2024.
 
 Este capítulo apresenta os resultados obtidos, organizados em quatro blocos principais: (i) análise da calibração dos coeficientes no \ac{AMPL}; (ii) distribuição geral dos erros da rede neural; (iii) análise de estabilidade e relação entre métricas; e (iv) síntese e discussão dos achados, com ênfase na comparação entre os cenários padrão e L2.
 
@@ -25,8 +25,7 @@ As Tabelas \ref{tab:coeficientes_padrao} e \ref{tab:coeficientes_l2} apresentam 
         \ac{MSE} & 17693,99 & 42001,18 & 0,02 & 31081,89 \\
         \hline
     \end{tabular}
-    \caption{Dados para Minimização Padrão}
-    \label{tab:coeficientes_padrao}
+    \caption{Dados para Minimização Padrão}\label{tab:coeficientes_padrao}
 \end{table}
 
 \begin{table}[H]
@@ -44,8 +43,7 @@ As Tabelas \ref{tab:coeficientes_padrao} e \ref{tab:coeficientes_l2} apresentam 
         \ac{MSE} & 53713,20 & 93047,72 & 510,96 & 432081,27 \\
         \hline
     \end{tabular}
-    \caption{Dados para Minimização com Regularização L2}
-    \label{tab:coeficientes_l2}
+    \caption{Dados para Minimização com Regularização L2}\label{tab:coeficientes_l2}
 \end{table}
 
 Observa-se que o \ac{MSE} de calibração do cenário com regularização L2 é, aproximadamente, três vezes superior ao do cenário padrão. Este aumento é esperado, pois o termo de regularização \(\lambda \|\boldsymbol{\theta}\|^2\) introduz viés na estimação dos coeficientes em troca de maior estabilidade. Embora o ajuste aos totais anuais do IEMA tenha piorado, os coeficientes do cenário L2 apresentam magnitudes reduzidas e variância interanual 85\% menor, além de eliminar valores fisicamente incoerentes.
@@ -59,21 +57,21 @@ O objetivo da calibração não é maximizar o ajuste aos dados de treinamento, 
 As Figuras \ref{fig:hist_padrao} e \ref{fig:hist_L2} apresentam os histogramas do erro \ac{MAE} por usina obtidos no conjunto de teste (ano de 2024), respectivamente para o método de minimização padrão e para a abordagem com regularização L2. A escala logarítmica adotada evidencia a distribuição dos erros entre as 39 usinas analisadas.
 
 \begin{figure}[H]
-    \begin{subfigure}{0.45\textwidth}
+    \centering
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\linewidth]{figuras/Padrão/Histograma MAE}
-        \caption{Sem regularização}
-        \label{fig:hist_padrao}
+        \caption{Sem regularização}\label{fig:hist_padrao}
     \end{subfigure}
-    \hfill
-    \begin{subfigure}{0.45\textwidth}
+    
+    \vspace{0.5cm}
+    
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\linewidth]{figuras/Regressão L2/Histograma MAE_L2}
-        \caption{Com regularização L2}
-        \label{fig:hist_L2}
+        \caption{Com regularização L2}\label{fig:hist_L2}
     \end{subfigure}
-    \caption{Quantidade de Usinas por Erro \ac{MAE}}
-    \label{fig:histograma}
+    \caption{Quantidade de Usinas por MAE}\label{fig:histograma}
 \end{figure}
 
 A Figura \ref{fig:hist_padrao} apresenta o histograma do \ac{MAE} para o cenário de minimização padrão. Observa-se que a maioria das usinas concentra-se na faixa de \ac{MAE} entre 1,3 e 3,2 \ac{tCO$_2$e}/h, com pico em aproximadamente 1,3 \ac{tCO$_2$e}/h. No entanto, a distribuição apresenta uma cauda longa para a direita: 9 usinas apresentaram \ac{MAE} superior a 5 \ac{tCO$_2$e}/h, sendo 3 delas com erros superiores a 19 \ac{tCO$_2$e}/h. Esse comportamento indica que, embora o modelo padrão seja capaz de estimar adequadamente as emissões da maioria das usinas, ele falha significativamente para um subconjunto delas.
@@ -83,20 +81,23 @@ Em comparação, o cenário com regularização L2 apresentado na Figura \ref{fi
 As Figuras \ref{fig:dist_padrao} e \ref{fig:dist_L2} complementam a análise dos histogramas ao apresentar o \ac{MAE} individual de cada usina, ordenado decrescentemente.
 
 \begin{figure}[H]
-    \begin{subfigure}{0.45\textwidth}
+    \centering
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\linewidth]{figuras/Padrão/Dispersão}
         \caption{Sem regularização}
         \label{fig:dist_padrao}
     \end{subfigure}
-    \hfill
-    \begin{subfigure}{0.45\textwidth}
+    
+    \vspace{0.5cm}
+    
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\linewidth]{figuras/Regressão L2/Dispersão_L2}
         \caption{Com regularização}
         \label{fig:dist_L2}
     \end{subfigure}
-    \caption{Distribuição das Usinas por Erro \ac{MAE}}
+    \caption{Distribuição das Usinas por MAE}
     \label{fig:distr_mae}
 \end{figure}
 
@@ -108,39 +109,48 @@ Comparativamente, a Figura \ref{fig:dist_L2} mostra uma redução na média para
 
 \subsection{Melhores e Piores Desempenhos}
 
-As Figuras \ref{fig:melhores_padrao} e \ref{fig:piores_padrao} representam os melhores e piores desempenhos das usinas para o método padrão, enquanto que as Figuras \ref{fig:melhores_l2} e \ref{fig:piores_l2} representam os dados para o método com regularização L2.
+As Figuras \ref{fig:melhores_padrao} e \ref{fig:melhores_l2} representam os melhores desempenhos das usinas, enquanto as Figuras \ref{fig:piores_padrao} e \ref{fig:piores_l2} representam os piores desempenhos.
 
 \begin{figure}[H]
     \centering
-    \begin{subfigure}[b]{0.45\textwidth}
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\textwidth]{figuras/Padrão/10 Melhores Desempenhos}
         \caption{Melhores - Sem regularização}
         \label{fig:melhores_padrao}
     \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.45\textwidth}
+    
+    \vspace{0.5cm}
+    
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\textwidth]{figuras/Regressão L2/10 Melhores Desempenhos_L2}
         \caption{Melhores - Com regularização}
         \label{fig:melhores_l2}
     \end{subfigure}
-    \\
-    \begin{subfigure}[b]{0.45\textwidth}
+    \caption{Usinas com Melhores Desempenhos}
+    \label{fig:melhores}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\textwidth]{figuras/Padrão/10 Piores Desempenhos}
         \caption{Piores - Sem regularização}
         \label{fig:piores_padrao}
     \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.45\textwidth}
+    
+    \vspace{0.5cm}
+    
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\textwidth]{figuras/Regressão L2/10 Piores Desempenhos_L2}
         \caption{Piores - Com regularização}
         \label{fig:piores_l2}
     \end{subfigure}
-    \caption{Comparação de Desempenho Favorável e Não Favorável}
-    \label{fig:desempenho}
+    \caption{Usinas com Piores Desempenhos}
+    \label{fig:piores}
 \end{figure}
 
 Observa-se que o conjunto de usinas com melhor desempenho é semelhante entre os cenários, predominando usinas movidas a gás natural em ciclo combinado, que apresentam operação estável e poucas transições. O \ac{MAE} médio entre estas usinas foi de 0,87 \ac{tCO$_2$e}/h no cenário padrão e 0,92 \ac{tCO$_2$e}/h no cenário L2, indicando que a regularização não prejudicou significativamente o desempenho nas usinas já bem estimadas.
@@ -152,14 +162,17 @@ Para as usinas com pior desempenho, a regularização L2 reduziu o \ac{MAE} para
 As Figuras \ref{fig:dist_inst_padrao} e \ref{fig:dist_inst_L2} apresentam a distribuição da razão de estabilidade \(R = \text{MSE} / \text{MAE}^2\) para os dois cenários.
 
 \begin{figure}[H]
-    \begin{subfigure}{0.45\textwidth}
+    \centering
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\linewidth]{figuras/Padrão/Distribuição de Instabilidade}
         \caption{Sem regularização}
         \label{fig:dist_inst_padrao}
     \end{subfigure}
-    \hfill
-    \begin{subfigure}{0.45\textwidth}
+    
+    \vspace{0.5cm}
+    
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\linewidth]{figuras/Regressão L2/Distribuição de Instabilidade_L2}
         \caption{Com regularização}
@@ -176,20 +189,23 @@ No cenário padrão (Figura \ref{fig:dist_inst_padrao}), 72\% das usinas apresen
 A Figura \ref{fig:mae_X_inst} apresenta a relação entre \ac{MAE} e a razão de estabilidade \(R\) para cada usina.
 
 \begin{figure}[H]
-    \begin{subfigure}{0.45\textwidth}
+    \centering
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\linewidth]{figuras/Padrão/MAE x Instabilidade}
         \caption{Sem regularização}
         \label{fig:mae_inst_padrao}
     \end{subfigure}
-    \hfill
-    \begin{subfigure}{0.45\textwidth}
+    
+    \vspace{0.5cm}
+    
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\linewidth]{figuras/Regressão L2/MAE x Instabilidade_L2}
         \caption{Com regularização}
         \label{fig:mae_inst_l2}
     \end{subfigure}
-    \caption{Relação entre \ac{MAE} e Instabilidade}
+    \caption{Relação entre MAE e Instabilidade}
     \label{fig:mae_X_inst}
 \end{figure}
 
@@ -198,20 +214,23 @@ Usinas que combinam alto \ac{MAE} com alta instabilidade (quadrante superior dir
 A Figura \ref{fig:mae_X_mse} mostra a relação entre \ac{MAE} e \ac{MSE}, destacando a influência de outliers na métrica \ac{MSE}.
 
 \begin{figure}[H]
-    \begin{subfigure}{0.45\textwidth}
+    \centering
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\linewidth]{figuras/Padrão/MAE x MSE}
         \caption{Sem regularização}
         \label{fig:mse_padrao}
     \end{subfigure}
-    \hfill
-    \begin{subfigure}{0.45\textwidth}
+    
+    \vspace{0.5cm}
+    
+    \begin{subfigure}{0.6\textwidth}
         \centering
         \includesvg[width=\linewidth]{figuras/Regressão L2/MAE x MSE_L2}
         \caption{Com regularização}
         \label{fig:mse_l2}
     \end{subfigure}
-    \caption{Relação entre \ac{MAE} e \ac{MSE}}
+    \caption{Relação entre MAE e MSE}
     \label{fig:mae_X_mse}
 \end{figure}
 

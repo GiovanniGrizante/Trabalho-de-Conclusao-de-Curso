@@ -18,6 +18,76 @@ Todos os experimentos foram executados em um computador com processador AMD Ryze
     \item Treinamento da rede neural: 47 minutos (cenário padrão) e 48 minutos (cenário L2), com 230 e 245 épocas respectivamente, ambos interrompidos por \textit{early stopping}.
 \end{itemize}
 
+A Figura \ref{fig:organizacao_implementacao} apresenta a organização geral da implementação. Os dados brutos (ONS e IEMA) alimentam o Módulo 1 (pré-processamento), cuja saída serve como entrada para o Módulo 2 (calibração). Este gera os coeficientes calibrados e as emissões sintéticas, que são utilizados pelo Módulo 3 (rede neural) para treinar os modelos individuais por usina, produzindo as estimativas horárias avaliadas nos resultados.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        node distance=0.5cm,
+        block/.style={
+            rectangle,
+            draw,
+            rounded corners,
+            text width=5.5cm,
+            align=center,
+            minimum height=1.2cm,
+            font=\small
+        },
+        arrow/.style={->, >=stealth, thick}
+    ]
+    
+    % DADOS BRUTOS
+    \node[block] (dados) {
+        \textbf{DADOS BRUTOS} \\
+        • ONS (Geração horária em MW) \\
+        • IEMA (Emissões anuais + cadastro)
+    };
+    
+    % MÓDULO 1
+    \node[block, below=1.2cm of dados] (mod1) {
+        \textbf{MÓDULO 1: Pré-processamento} \\
+        • Filtragem de usinas \\
+        • Classificação de categorias \\
+        • Identificação de transições \\
+        • Cálculo de duração e fase \\
+        • Codificação polar
+    };
+    
+    % MÓDULO 2
+    \node[block, below=1.2cm of mod1] (mod2) {
+        \textbf{MÓDULO 2: Calibração (AMPL/IPOPT)} \\
+        • Minimização Eq. (3.6) - padrão \\
+        • Minimização Eq. (3.8) - L2 \\
+        • Geração emissões sintéticas
+    };
+    
+    % MÓDULO 3
+    \node[block, below=1.2cm of mod2] (mod3) {
+        \textbf{MÓDULO 3: Rede Neural (PyTorch)} \\
+        • MLP por usina (128→64→32→1) \\
+        • Early stopping + gradient clip \\
+        • Validação e teste
+    };
+    
+    % RESULTADOS
+    \node[block, below=1.2cm of mod3] (res) {
+        \textbf{RESULTADOS} \\
+        • Estimativas horárias \\
+        • Análise de erros (MAE, MSE, R) \\
+        • Comparação Padrão vs L2
+    };
+    
+    % SETAS
+    \draw[arrow] (dados.south) -- (mod1.north);
+    \draw[arrow] (mod1.south) -- (mod2.north);
+    \draw[arrow] (mod2.south) -- (mod3.north);
+    \draw[arrow] (mod3.south) -- (res.north);
+    
+    \end{tikzpicture}
+    \caption{Organização Geral da Implementação}
+    \label{fig:organizacao_implementacao}
+\end{figure}
+
 \section{Implementação do Pré-Processamento}
 
 O pré-processamento dos dados constitui a primeira etapa computacional do trabalho, sendo responsável por transformar os dados brutos do \ac{ONS} e do \ac{IEMA} em um conjunto estruturado, evidenciando os dados temporais.
@@ -54,33 +124,117 @@ A calibração dos coeficientes da equação de emissão representa a primeira e
 
 \subsection{Estrutura do Modelo de Otimização}
 
-O problema de minimização foi modelado na linguagem \ac{AMPL}. Foram criados dois arquivos: um arquivo de modelo (\texttt{.mod}) contendo as variáveis, a função objetivo e as restrições; e um arquivo de comandos (\texttt{.run}) especificando as opções do solver \ac{IPOPT}.
+O problema de minimização descrito na Seção 3.5 foi modelado na linguagem \ac{AMPL}. Esta linguagem foi escolhida por sua capacidade de representar problemas de otimização não-linear de forma declarativa, separando a formulação matemática (arquivo \texttt{.mod}) dos dados (arquivo \texttt{.dat}).
 
-As variáveis foram declaradas com os seguintes limites no arquivo \texttt{.mod}:
-\begin{verbatim}
-var alpha >= 0;
-var beta;        
-var gamma;
-var omega;
-var mu <= 0.5;   # limite para evitar overflow exponencial
-\end{verbatim}
+A implementação do modelo contempla os dois cenários propostos na metodologia. Para o cenário padrão, a função objetivo implementa a Equação \ref{eq:minimizacao_padrao}, enquanto para o cenário com regularização L2, a função objetivo incorpora o termo adicional de penalidade, conforme a Equação \ref{eq:regularizacao_l2}. Em ambos os casos, as variáveis de decisão são os coeficientes \(\alpha, \beta, \gamma, \omega, \mu\), sujeitos às restrições físicas da Equação \ref{eq:restricoes_fisicas}.
 
-A função objetivo implementa a Equação (3.2) para o cenário padrão, com a adição do termo de regularização L2 (Equação 3.3) para o cenário com regularização. Os dados de geração horária (divididos por 100) e a emissão anual alvo são fornecidos separadamente. O Pseudocódigo 4 (Apêndice A) apresenta o modelo \ac{AMPL} completo.
+Os dados de entrada do modelo são:
+\begin{itemize}
+    \item A série horária de geração \(P(t)\) para cada ano, normalizada pela divisão por 100 para garantir estabilidade numérica do termo exponencial;
+    \item As emissões anuais totais do \ac{IEMA} para cada usina, utilizadas como referência na função objetivo.
+\end{itemize}
 
-A escolha do solver \ac{IPOPT} justificou-se por sua robustez para problemas de grande escala com restrições de desigualdade e por sua implementação de método de ponto interior \cite{wachter2006implementation}. As tolerâncias foram configuradas para \(10^{-6}\) tanto para otimalidade quanto para factibilidade.
+Para a resolução do problema, empregou-se o solver \ac{IPOPT} (\textit{Interior Point Optimizer}) \cite{wachter2006implementation}, acessado por meio da biblioteca \texttt{amplpy} em Python. O \ac{IPOPT} é adequado para problemas de grande escala com restrições de desigualdade e implementa o método de pontos interiores, sendo robusto para a natureza não-linear da função objetivo. As tolerâncias do solver foram configuradas para \(10^{-6}\) tanto para otimalidade quanto para factibilidade.
 
 \subsection{Integração Python-\ac{AMPL}}
 
-Para automatizar a calibração das 39 usinas, utilizou-se a biblioteca \texttt{amplpy}. O fluxo de integração foi o seguinte:
+A calibração dos coeficientes para as 39 usinas foi realizada de forma automatizada utilizando a biblioteca \texttt{amplpy}, que permite invocar o \ac{AMPL} diretamente do ambiente Python. Esta integração é fundamental para processar um grande volume de dados de forma sistemática, evitando a necessidade de executar manualmente cada calibração.
+
+O fluxo de integração implementado segue os seguintes passos:
+
 \begin{enumerate}
-    \item Para cada usina, extraem-se os dados de geração horária e a emissão anual correspondente do \ac{IEMA};
-    \item Os dados são escritos em um arquivo \texttt{.dat} temporário;
-    \item O modelo \ac{AMPL} é carregado com \texttt{ampl = AMPL()} e o arquivo \texttt{.dat} é importado;
-    \item O solver \ac{IPOPT} é executado via \texttt{ampl.solve()};
-    \item Os coeficientes otimizados são extraídos com \texttt{ampl.get\_variable()} e armazenados em um dicionário Python.
+    \item \textbf{Preparação dos dados}: Para cada usina, carregam-se as séries horárias de geração \(P(t)\) (obtidas do \ac{ONS}) e a emissão anual total correspondente (obtida do \ac{IEMA}). Os dados são organizados em estruturas do Python (\texttt{pandas.DataFrame}) e, em seguida, escritos em um arquivo temporário no formato \texttt{.dat}, que é o formato de dados suportado pelo \ac{AMPL}.
+
+    \item \textbf{Carregamento do modelo}: O arquivo de modelo \ac{AMPL} (extensão \texttt{.mod}) contendo a formulação do problema (variáveis, função objetivo e restrições) é carregado na memória por meio do comando \texttt{AMPL()} da biblioteca \texttt{amplpy}. O arquivo de dados \texttt{.dat} correspondente à usina é então importado.
+
+    \item \textbf{Execução do solver}: O solver \ac{IPOPT} é invocado com o comando \texttt{ampl.solve()}. Durante a execução, o solver itera até encontrar uma solução que satisfaça as tolerâncias configuradas (\(10^{-6}\) para otimalidade e factibilidade). O progresso da otimização pode ser monitorado por meio de logs opcionais.
+
+    \item \textbf{Extração dos resultados}: Após a convergência, os coeficientes otimizados são extraídos utilizando o método \texttt{ampl.get\_variable()}. Estes valores são armazenados em um dicionário Python, associados à respectiva usina e ano, para uso nas etapas subsequentes (geração das emissões sintéticas e treinamento da rede neural).
 \end{enumerate}
 
-Este processo foi executado em paralelo utilizando a biblioteca \texttt{multiprocessing.Pool} com 8 processos, reduzindo o tempo total de calibração de aproximadamente 8 horas (processamento serial) para cerca de 2 horas.
+A Figura \ref{fig:integracao_ampl_python} detalha o fluxo de integração entre Python, AMPL e IPOPT implementado na etapa de calibração. O processo inicia-se com a preparação dos dados em Python, que são exportados para um arquivo \texttt{.dat}. Em seguida, o AMPL carrega o modelo matemático (arquivo \texttt{.mod}) e importa os dados. O solver IPOPT é então invocado para resolver o problema de otimização, e os coeficientes resultantes são extraídos e armazenados em estruturas Python para uso nas etapas subsequentes.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        node distance=0.8cm,
+        process/.style={
+            rectangle,
+            draw,
+            rounded corners,
+            text width=5cm,
+            align=center,
+            minimum height=0.8cm,
+            font=\small
+        },
+        io/.style={
+            trapezium,
+            trapezium left angle=70,
+            trapezium right angle=110,
+            draw,
+            text width=4cm,
+            align=center,
+            minimum height=0.8cm,
+            font=\small
+        },
+        arrow/.style={->, >=stealth, thick}
+    ]
+    
+    % ENTRADA
+    \node[io] (entrada) {
+        \textbf{ENTRADA} \\
+        Dados de geração (Python/ONS) \\
+        Emissões anuais (Python/IEMA)
+    };
+    
+    % PREPARAÇÃO
+    \node[process, below=0.8cm of entrada] (prep) {
+        \textbf{PREPARAÇÃO} \\
+        Organização dos dados em \\
+        arquivo .dat (Python)
+    };
+    
+    % CARREGAMENTO
+    \node[process, below=0.8cm of prep] (carrega) {
+        \textbf{CARREGAMENTO} \\
+        AMPL() carrega o modelo .mod \\
+        e importa o arquivo .dat
+    };
+    
+    % EXECUÇÃO
+    \node[process, below=0.8cm of carrega] (exec) {
+        \textbf{EXECUÇÃO DO SOLVER} \\
+        ampl.solve() invoca o IPOPT \\
+        com tolerâncias configuradas
+    };
+    
+    % EXTRAÇÃO
+    \node[process, below=0.8cm of exec] (extrai) {
+        \textbf{EXTRAÇÃO DOS RESULTADOS} \\
+        ampl.get\_variable() extrai \\
+        os coeficientes
+    };
+    
+    % SAÍDA
+    \node[io, below=0.8cm of extrai] (saida) {
+        \textbf{SAÍDA} \\
+        Coeficientes salvos em \\
+        dicionário Python
+    };
+    
+    % SETAS
+    \draw[arrow] (entrada.south) -- (prep.north);
+    \draw[arrow] (prep.south) -- (carrega.north);
+    \draw[arrow] (carrega.south) -- (exec.north);
+    \draw[arrow] (exec.south) -- (extrai.north);
+    \draw[arrow] (extrai.south) -- (saida.north);
+    
+    \end{tikzpicture}
+    \caption{Fluxo de integração entre Python, AMPL e IPOPT}
+    \label{fig:integracao_ampl_python}
+\end{figure}
+
+Para otimizar o tempo de processamento, a calibração das 39 usinas foi executada em paralelo utilizando a biblioteca \texttt{multiprocessing.Pool} do Python. Com isso, foi possível distribuir as calibrações entre os 8 núcleos do processador, reduzindo o tempo total de processamento de aproximadamente 8 horas (execução serial) para cerca de 2 horas.
 
 \subsection{Ajuste do Parâmetro de Regularização \(\lambda\)}
 
@@ -139,7 +293,9 @@ O Pseudocódigo 6 (Apêndice A) apresenta a implementação completa da prepara�
 
 \section{Implementação da Rede Neural}
 
-A segunda etapa do trabalho consistiu no desenvolvimento e treinamento de uma rede neural \ac{MLP} para estimar diretamente as emissões horárias sintéticas.
+A segunda etapa do trabalho consistiu no desenvolvimento e treinamento de redes neurais \ac{MLP} para estimar diretamente as emissões horárias sintéticas. Conforme mencionado na Metodologia (Seção \ref{chp:met}), um modelo de rede neural separado foi treinado para cada usina, totalizando 39 modelos ao final do processo. Esta decisão decorre da heterogeneidade operacional das usinas brasileiras, que inviabiliza um modelo único generalizado.
+
+O procedimento descrito nas subseções seguintes foi executado individualmente para cada usina, utilizando seus respectivos dados de treinamento e resultando em um modelo específico para aquela planta.
 
 \subsection{Construção da Arquitetura \ac{MLP}}
 
@@ -147,29 +303,29 @@ A rede neural foi implementada utilizando PyTorch. A escolha desta biblioteca de
 
 A arquitetura seguiu a estrutura definida na Tabela \ref{tab:arquitetura}: três camadas ocultas com 128, 64 e 32 neurônios, ativação \ac{ReLU}, \textit{dropout} de 0,3 após cada camada oculta, e camada de saída com um neurônio e ativação \ac{ReLU} para garantir não-negatividade das emissões, coerentes fisicamente com o problema. O horizonte de previsão foi definido como 1 hora.
 
-A implementação foi encapsulada em uma classe que herda de \texttt{torch.nn.Module}:
+% A implementação foi encapsulada em uma classe que herda de \texttt{torch.nn.Module}:
 
-\begin{verbatim}
-class EmissionMLP(nn.Module):
-    def __init__(self, input_dim):
-        super().__init__()
-        self.fc1 = nn.Linear(input_dim, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 32)
-        self.fc4 = nn.Linear(32, 1)
-        self.dropout = nn.Dropout(0.3)
-        self.relu = nn.ReLU()
+% \begin{verbatim}
+% class EmissionMLP(nn.Module):
+%     def __init__(self, input_dim):
+%         super().__init__()
+%         self.fc1 = nn.Linear(input_dim, 128)
+%         self.fc2 = nn.Linear(128, 64)
+%         self.fc3 = nn.Linear(64, 32)
+%         self.fc4 = nn.Linear(32, 1)
+%         self.dropout = nn.Dropout(0.3)
+%         self.relu = nn.ReLU()
 
-    def forward(self, x):
-        x = self.relu(self.fc1(x))
-        x = self.dropout(x)
-        x = self.relu(self.fc2(x))
-        x = self.dropout(x)
-        x = self.relu(self.fc3(x))
-        x = self.dropout(x)
-        x = self.relu(self.fc4(x))
-        return x
-\end{verbatim}
+%     def forward(self, x):
+%         x = self.relu(self.fc1(x))
+%         x = self.dropout(x)
+%         x = self.relu(self.fc2(x))
+%         x = self.dropout(x)
+%         x = self.relu(self.fc3(x))
+%         x = self.dropout(x)
+%         x = self.relu(self.fc4(x))
+%         return x
+% \end{verbatim}
 
 \subsection{Ponderação Diferenciada para Transições}
 

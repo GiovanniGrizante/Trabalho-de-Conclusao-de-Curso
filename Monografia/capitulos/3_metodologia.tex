@@ -109,39 +109,39 @@ onde:
 Os coeficientes são obtidos resolvendo o seguinte problema de minimização, que busca minimizar o erro quadrático médio entre a emissão anual estimada (somatório das emissões horárias) e a emissão anual real fornecida pelo \ac{IEMA}:
 
 \begin{equation}
-\min_{\alpha,\beta,\gamma,\omega,\mu} \frac{1}{N} \sum_{j=1}^{N} \left( \sum_{i=1}^{H} E_{\text{usina}}^i(P_{G_i}) - E_{\text{usina}}^j \right)^2
+\min_{\alpha,\beta,\gamma,\omega,\mu} \frac{1}{N} \sum_{j=1}^{N} \left( \sum_{i=1}^{H} E_{\text{usina}}^{i}(P_{G_i}) - E_{\text{usina}}^{j} \right)^2
 \label{eq:minimizacao_padrao}
 \end{equation}
 
 sujeito às restrições físicas:
 
 \begin{equation}
-\alpha \geq 0,\quad \mu \leq \mu_{\max}
+\alpha \geq 0, \quad \mu \leq \mu_{\max}
 \label{eq:restricoes_fisicas}
 \end{equation}
 
 onde:
 \begin{itemize}
-    \item \(N\) é o número de usinas;
+    \item \(N\) é o número de usinas (\(N = 39\));
     \item \(H\) é o número de horas do respectivo ano (\(H = 8760\) para anos não bissextos, \(H = 8784\) para anos bissextos);
-    \item \(E_{\text{usina}}^j\) é a emissão anual real do \ac{IEMA} para a usina \(j\);
+    \item \(E_{\text{usina}}^{j}\) é a emissão anual real do \ac{IEMA} para a usina \(j\);
     \item \(\mu_{\max}\) é um limite superior para evitar \textit{overflow} numérico do termo exponencial (definido empiricamente em \(0,5\)).
 \end{itemize}
 
-Apenas o coeficiente \(\alpha\) foi explicitamente restringido à não-negatividade, por representar o termo quadrático associado ao crescimento da emissão em cargas elevadas. Os coeficientes \(\gamma\) e \(\omega\) foram mantidos livres para permitir maior flexibilidade durante a calibração do problema inverso \cite{wood2013power}.
+Apenas o coeficiente \(\alpha\) foi explicitamente restringido à não-negatividade, por representar o termo quadrático associado ao crescimento da emissão em cargas elevadas. Os coeficientes \(\gamma\) e \(\omega\) foram mantidos livres para permitir maior flexibilidade durante a calibração do problema inverso \cite{wood2013power}. O coeficiente \(\mu\) recebe um limite superior \(\mu_{\max} = 0,5\) para evitar crescimento excessivo do termo exponencial, que poderia causar instabilidade numérica.
 
 \subsection{Regularização L2 (Ridge)}
 
 O problema de calibração inversa é intrinsecamente mal condicionado, podendo produzir coeficientes excessivamente elevados que se cancelam mutuamente (\textit{overfitting} na calibração). Para mitigar esse efeito, introduz-se um termo de regularização L2 (Tikhonov) à função objetivo \cite{tikhonov1977solutions}:
 
 \begin{equation}
-\min \frac{1}{N} \sum_{j=1}^{N} \left( \sum_{i=1}^{H} E_{\text{usina}}^i(P_{G_i}) - E_{\text{usina}}^j \right)^2 + \lambda \left( \alpha^2 + \beta^2 + \gamma^2 + \omega^2 + \mu^2 \right)
+\min_{\alpha,\beta,\gamma,\omega,\mu} \frac{1}{N} \sum_{j=1}^{N} \left( \sum_{i=1}^{H} E_{\text{usina}}^{i}(P_{G_i}) - E_{\text{usina}}^{j} \right)^2 + \lambda \left( \alpha^2 + \beta^2 + \gamma^2 + \omega^2 + \mu^2 \right)
 \label{eq:regularizacao_l2}
 \end{equation}
 
 sujeito às mesmas restrições da calibração padrão (Equação \ref{eq:restricoes_fisicas}).
 
-O parâmetro \(\lambda \geq 0\) controla a intensidade da regularização: \(\lambda = 0\) recupera o problema padrão, enquanto valores positivos penalizam coeficientes de grande magnitude, promovendo soluções mais estáveis e generalizáveis. O valor de \(\lambda\) deve ser selecionado de forma a equilibrar a redução do erro de calibração e a estabilidade dos coeficientes.
+O parâmetro \(\lambda \geq 0\) controla a intensidade da regularização: \(\lambda = 0\) recupera o problema padrão (Equação \ref{eq:minimizacao_padrao}), enquanto valores positivos penalizam coeficientes de grande magnitude, promovendo soluções mais estáveis e generalizáveis. O valor de \(\lambda\) deve ser selecionado de forma a equilibrar a redução do erro de calibração e a estabilidade dos coeficientes. Neste trabalho, adotou-se \(\lambda = 30\), conforme justificado na Seção 4.3.3.
 
 \section{Emissões Sintéticas como Alvos para Aprendizado}
 
@@ -154,6 +154,11 @@ A fidelidade da base sintética depende diretamente da qualidade do ajuste e da 
 \section{Arquitetura da Rede Neural}
 
 Optou-se por uma arquitetura do tipo \ac{MLP} em detrimento de redes recorrentes (\ac{LSTM}, \ac{GRU}) porque a emissão horária, no modelo proposto, depende essencialmente da geração no mesmo instante \(t\), e não de uma sequência temporal longa. A \ac{MLP} é suficiente, mais simples e menos suscetível a \textit{overfitting} com o volume de dados disponível \cite{goodfellow2016deep}.
+
+
+\subsection{Modelos Individualizados por Usina}
+
+Um aspecto fundamental da metodologia é que um modelo de rede neural \ac{MLP} separado é treinado para cada uma das 39 usinas. Esta abordagem individualizada é necessária porque cada usina possui características operacionais próprias: diferentes tipos de combustível, eficiências energéticas, potências instaladas e perfis de transição entre patamares de carga. Um modelo único para todas as usinas não seria capaz capturar essas particularidades. Portanto, o processo descrito na Seção 3.7.1 é repetido individualmente para cada usina, resultando em 39 modelos de rede neural distintos ao final do treinamento.
 
 \subsection{Estrutura das Camadas}
 
